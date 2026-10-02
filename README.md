@@ -62,7 +62,7 @@ Local desktop use works **without Tailscale**. Tailscale is required for secure 
 3. In PC Monitor Setup, select **Re-check Tailscale**. Once connected, copy the device address or scan its QR code.
 4. Open that address in the other device's browser and enter your PC Monitor PIN.
 
-The address contains the PC's detected Tailscale IPv4 and actual server port. Preferred port **7331** falls back to **7332–7335** when occupied. Never add the PIN to the URL. On iPhone, Safari → Share → **Add to Home Screen** provides convenient access.
+The address uses your PC’s detected Tailscale IPv4 address and active PC Monitor port. PC Monitor prefers port 7331 and automatically falls back to 7332–7335 if needed. The PIN is never included in the URL. On supported mobile browsers, you can add PC Monitor to your Home Screen for quick app-like access.
 
 If Tailscale is missing or disconnected, Setup explains the next step. You can finish and use PC Monitor locally first. Do not forward this HTTP port through a router or expose it publicly.
 
