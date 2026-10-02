@@ -1,0 +1,36 @@
+# Local access credentials and runtime artifacts
+config.json
+config.json.*.tmp
+temperature-settings.json
+temperature-settings.json.*.tmp
+onboarding-complete.json
+server.log
+server.pid
+server-state.json
+server.instance.json
+server-start.lock
+server-start.*.lock
+server-start.*.tmp
+*.log
+*.pid
+*.state
+*.state.json
+*.lock
+
+# Generated/local files
+AGENTS.md
+PROJECT_STATUS.md
+THE-PLAN.md
+SECURITY.md
+CONTRIBUTING.md
+docs/*.md
+dist/
+publish/
+publish-staging-*/
+publish-previous-*/
+pet-output/
+*.lnk
+packaging/cache/
+packaging/payload/
+packaging/payload-manifest.json
+desktop-trust.bin

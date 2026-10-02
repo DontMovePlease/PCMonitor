@@ -1,0 +1,7 @@
+QR Code generator library 1.8.0 — Copyright Project Nayuki, MIT License.
+Unmodified official precompiled ECMAScript 6 release (license in file header):
+https://github.com/nayuki/QR-Code-generator/releases/tag/v1.8.0
+https://github.com/nayuki/QR-Code-generator/releases/download/v1.8.0/qrcodegen-v1.8.0-es6.js
+SHA-256: 6a1116192ed1dd67fa1bf31e77f5817103d71c23bbac24c382e698b7668bdd01
+PC Monitor uses this only for offline local Setup phone-address QR generation.
+No npm dependency, external service, PIN, cookie or session data is involved.

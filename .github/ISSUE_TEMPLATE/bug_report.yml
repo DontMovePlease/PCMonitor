@@ -1,0 +1,40 @@
+name: Bug or compatibility report
+description: Report a reproducible problem in the experimental alpha.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "For security vulnerabilities, use [private reporting](https://github.com/DontMovePlease/PCMonitor/security/advisories/new). Never post PINs, cookies, credentials or unredacted personal information."
+  - type: input
+    id: version
+    attributes:
+      label: PC Monitor version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and edition
+      placeholder: "Windows 11 Home / Pro, build number if known"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: "What did you do, what should happen, and what happened instead?"
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Reviewed compatibility report (optional)
+      description: "Diagnostics → Copy report. Remove private addresses and personal details before sharing."
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: "I removed PINs, credentials, private addresses and other personal information."
+          required: true

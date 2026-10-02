@@ -1,0 +1,2 @@
+HIDSharp
+Copyright 2010-2025 James F. Bellinger <http://software.seekye.com/hidsharp>

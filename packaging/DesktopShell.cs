@@ -1,0 +1,459 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Net;
+using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
+using System.Security.Principal;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web.Script.Serialization;
+using System.Windows.Forms;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+
+// A client of the existing dashboard. No PIN handling, host objects, HTTP API,
+// telemetry collector, or client-supplied command/path bridge lives here.
+internal static class DesktopShell
+{
+    internal static readonly string AppDirectory = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+    internal static readonly string RootDirectory = Path.GetDirectoryName(AppDirectory);
+    internal static readonly string DataDirectory = Path.Combine(RootDirectory, "data");
+    internal static readonly string ProfileDirectory = Path.Combine(RootDirectory, "desktop-profile");
+    internal static readonly string Identity = BuildIdentity();
+    internal static string BuildIdentity()
+    {
+        using (var sha = SHA256.Create())
+            return "Local\\PCMonitor.Desktop." + BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(
+                AppDirectory.ToUpperInvariant() + WindowsIdentity.GetCurrent().User.Value))).Replace("-", "");
+    }
+    internal static void AssertPlain(string path)
+    {
+        for (var directory = new DirectoryInfo(path); directory != null; directory = directory.Parent)
+            if (directory.Exists && (directory.Attributes & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Desktop storage is redirected.");
+    }
+    internal static bool Installed()
+    {
+        return File.Exists(Path.Combine(AppDirectory, "installation.json")) &&
+            File.Exists(Path.Combine(AppDirectory, "scripts", "desktop-host.ps1"));
+    }
+    internal static EventWaitHandle CreateEvent(string suffix)
+    {
+        var security = new EventWaitHandleSecurity();
+        security.AddAccessRule(new EventWaitHandleAccessRule(WindowsIdentity.GetCurrent().User,
+            EventWaitHandleRights.FullControl, AccessControlType.Allow));
+        bool created;
+        return new EventWaitHandle(false, EventResetMode.AutoReset, Identity + suffix, out created, security);
+    }
+    internal static int Run()
+    {
+        if (!Installed()) return 3;
+        try
+        {
+            var security = new MutexSecurity();
+            security.AddAccessRule(new MutexAccessRule(WindowsIdentity.GetCurrent().User, MutexRights.FullControl, AccessControlType.Allow));
+            bool created;
+            using (var mutex = new Mutex(false, Identity + ".mutex", out created, security))
+            {
+                bool acquired;
+                try { acquired = mutex.WaitOne(0); } catch (AbandonedMutexException) { acquired = true; }
+                if (!acquired) { using (var open = CreateEvent(".open")) open.Set(); return 0; }
+                try
+                {
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                    using (var open = CreateEvent(".open"))
+                    using (var close = CreateEvent(".close"))
+                    using (var window = new DesktopWindow())
+                    {
+                        var reopen = ThreadPool.RegisterWaitForSingleObject(open, delegate { window.PostOpen(); }, null, -1, false);
+                        var exit = ThreadPool.RegisterWaitForSingleObject(close, delegate { window.PostExit(); }, null, -1, false);
+                        try { Application.Run(window); }
+                        finally { reopen.Unregister(null); exit.Unregister(null); }
+                    }
+                }
+                finally { mutex.ReleaseMutex(); }
+            }
+            return 0;
+        }
+        catch { MessageBox.Show("PC Monitor could not open safely. Try reopening PC Monitor. No unrelated process was stopped.", "PC Monitor", MessageBoxButtons.OK, MessageBoxIcon.Information); return 1; }
+    }
+    internal static int CloseExisting()
+    {
+        if (!Installed()) return 3;
+        try
+        {
+            using (var mutex = Mutex.OpenExisting(Identity + ".mutex"))
+            using (var close = CreateEvent(".close"))
+            {
+                close.Set();
+                bool stopped;
+                try { stopped = mutex.WaitOne(10000); } catch (AbandonedMutexException) { stopped = true; }
+                if (!stopped) return 1;
+                mutex.ReleaseMutex();
+            }
+            return 0;
+        }
+        catch (WaitHandleCannotBeOpenedException) { return 0; }
+        catch { return 1; }
+    }
+    internal static ProcessStartInfo Script(string name)
+    {
+        // Call sites use fixed literal script names only. No input from the page.
+        return new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe")) {
+            Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + Path.Combine(AppDirectory, "scripts", name) + "\"",
+            WorkingDirectory = AppDirectory, UseShellExecute = false, CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden, RedirectStandardOutput = true, RedirectStandardError = true
+        };
+    }
+}
+
+internal sealed class DesktopWindow : Form
+{
+    private readonly Panel recovery = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(15, 22, 34) };
+    private readonly Label title = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.White, Font = new Font("Segoe UI", 23, FontStyle.Bold) };
+    private readonly Label description = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(180, 197, 214), Font = new Font("Segoe UI", 11) };
+    private readonly FlowLayoutPanel actions = new FlowLayoutPanel { AutoSize = false, FlowDirection = FlowDirection.LeftToRight };
+    private readonly Button retry = new Button { Text = "Try again", Width = 130, Height = 42 };
+    private readonly Button runtimeLink = new Button { Text = "Install WebView2", Width = 155, Height = 42 };
+    private readonly Button desktopExit = new Button { Text = "×", FlatStyle = FlatStyle.Flat, ForeColor = Color.FromArgb(148,163,184), BackColor = Color.FromArgb(10,16,27), Font = new Font("Segoe UI",16), TabStop = true, AccessibleName = "Exit desktop app" };
+    private readonly NotifyIcon tray;
+    private WebView2 view;
+    private string origin;
+    private bool busy, exiting, initialized, loading, visibilityPending;
+    private Process preparation;
+    private Rectangle normalBounds;
+    private bool wasMaximized;
+    private TaskCompletionSource<string> addressRequest;
+    private readonly JavaScriptSerializer json = new JavaScriptSerializer { MaxJsonLength = 8192, RecursionLimit = 8 };
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+    [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wparam, IntPtr lparam);
+
+    internal DesktopWindow()
+    {
+        Text = "PC Monitor"; MinimumSize = new Size(760, 560); Size = new Size(980, 740);
+        FormBorderStyle = FormBorderStyle.None; ControlBox = false;
+        MaximizedBounds = Screen.GetWorkingArea(this);
+        StartPosition = FormStartPosition.CenterScreen; AutoScaleMode = AutoScaleMode.Dpi;
+        BackColor = recovery.BackColor;
+        Icon = new Icon(Path.Combine(DesktopShell.AppDirectory, "PCMonitor.ico"));
+        RestoreBoundsFromDisk();
+        normalBounds = Bounds;
+        Controls.Add(recovery); recovery.Controls.Add(title); recovery.Controls.Add(description); recovery.Controls.Add(actions);
+        desktopExit.FlatAppearance.BorderSize = 0;
+        desktopExit.FlatAppearance.MouseOverBackColor = Color.FromArgb(115,35,48);
+        desktopExit.Click += delegate { ExitShell(); };
+        Controls.Add(desktopExit);
+        MouseEventHandler dragRecovery = delegate(object sender, MouseEventArgs e) {
+            if (e.Button == MouseButtons.Left) { ReleaseCapture(); SendMessage(Handle, 0xA1, new IntPtr(2), IntPtr.Zero); }
+        };
+        recovery.MouseDown += dragRecovery; title.MouseDown += dragRecovery; description.MouseDown += dragRecovery;
+        foreach (var button in new[] { retry, runtimeLink }) {
+            button.FlatStyle = FlatStyle.Flat; button.ForeColor = Color.White; button.BackColor = Color.FromArgb(35, 52, 71);
+            button.FlatAppearance.BorderSize = 0; button.Cursor = Cursors.Hand; actions.Controls.Add(button);
+        }
+        retry.Click += async delegate { await StartAsync(false); };
+        runtimeLink.Click += delegate { External("https://developer.microsoft.com/microsoft-edge/webview2/#download-section"); };
+        var menu = new ContextMenuStrip();
+        menu.Items.Add("Open PC Monitor", null, delegate { OpenWindow(); });
+        menu.Items.Add("Copy Mobile Address", null, async delegate { await CopyAddressAsync(); });
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Restart PC Monitor Backend…", null, async delegate {
+            if (!busy && MessageBox.Show(this, "Restart the backend? Connected dashboards will reconnect and require the PIN again.", "PC Monitor", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) == DialogResult.OK)
+                await StartAsync(true);
+        });
+        menu.Items.Add("Exit Desktop App", null, delegate { ExitShell(); });
+        tray = new NotifyIcon { Icon = Icon, Text = "PC Monitor", Visible = true, ContextMenuStrip = menu };
+        tray.DoubleClick += delegate { OpenWindow(); };
+        Shown += async delegate { await StartAsync(false); };
+        Resize += delegate { LayoutRecovery(); if (WindowState == FormWindowState.Normal) normalBounds = Bounds; wasMaximized = WindowState == FormWindowState.Maximized; QueueVisibility(); };
+        Move += delegate { if (WindowState == FormWindowState.Normal) normalBounds = Bounds; };
+        FormClosing += delegate(object sender, FormClosingEventArgs e) {
+            SaveBounds();
+            if (!exiting && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); QueueVisibility(); }
+        };
+        FormClosed += delegate { tray.Visible = false; tray.Dispose(); if (view != null) view.Dispose(); StopPreparation(); };
+        State("Opening PC Monitor", "Starting or reusing your local server…", false, false);
+    }
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // DWM styling without a visible Windows caption or permanent controls.
+        try { int dark = 1, rounded = 2; DwmSetWindowAttribute(Handle, 20, ref dark, 4); DwmSetWindowAttribute(Handle, 33, ref rounded, 4); } catch { }
+    }
+    protected override CreateParams CreateParams {
+        get {
+            var value = base.CreateParams;
+            // Retain system/taskbar keyboard actions and resize/snap semantics.
+            value.Style |= 0x80000 | 0x20000 | 0x10000 | 0x40000;
+            return value;
+        }
+    }
+    protected override void WndProc(ref Message message) {
+        if (message.Msg == 0x83 && message.WParam != IntPtr.Zero) { message.Result = IntPtr.Zero; return; }
+        if (message.Msg == 0x84 && WindowState == FormWindowState.Normal) {
+            long coordinates = message.LParam.ToInt64();
+            Point point = PointToClient(new Point((short)(coordinates & 0xffff), (short)((coordinates >> 16) & 0xffff)));
+            int edge = Math.Max(5, (int)(6 * DeviceDpi / 96.0));
+            bool left = point.X < edge, right = point.X >= ClientSize.Width - edge;
+            bool top = point.Y < edge, bottom = point.Y >= ClientSize.Height - edge;
+            int hit = top ? (left ? 13 : right ? 14 : 12) : bottom ? (left ? 16 : right ? 17 : 15) : left ? 10 : right ? 11 : 0;
+            if (hit != 0) { message.Result = new IntPtr(hit); return; }
+        }
+        base.WndProc(ref message);
+    }
+    internal void PostOpen() { try { if (IsHandleCreated && !IsDisposed) BeginInvoke((Action)OpenWindow); } catch (InvalidOperationException) { } }
+    internal void PostExit() { try { if (IsHandleCreated && !IsDisposed) BeginInvoke((Action)ExitShell); } catch (InvalidOperationException) { } }
+    private void OpenWindow() { Show(); if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal; Activate(); QueueVisibility(); }
+    private async void ExitShell() {
+        if (exiting) return;
+        exiting = true;
+        if (view != null && initialized) {
+            try { await SetClientVisibilityAsync(false); await Task.Delay(200); } catch { }
+        }
+        Close();
+    }
+    private void StopPreparation() {
+        // This is ONLY the helper we spawned/hold. Never kills a Node/backend.
+        try { if (preparation != null && !preparation.HasExited) preparation.Kill(); } catch { }
+    }
+    private void LayoutRecovery() {
+        int scaleHeight = (int)(36 * DeviceDpi / 96.0), scaleWidth = (int)(40 * DeviceDpi / 96.0);
+        desktopExit.SetBounds(ClientSize.Width - scaleWidth, 0, scaleWidth, scaleHeight);
+        desktopExit.BringToFront();
+        int y = Math.Max(50, (ClientSize.Height - 210) / 2);
+        title.SetBounds(20, y, ClientSize.Width - 40, 60);
+        description.SetBounds(60, y + 67, ClientSize.Width - 120, 78);
+        int actionWidth = (retry.Visible ? retry.Width + retry.Margin.Horizontal : 0) + (runtimeLink.Visible ? runtimeLink.Width + runtimeLink.Margin.Horizontal : 0);
+        actions.SetBounds(Math.Max(20, (ClientSize.Width - actionWidth) / 2), y + 150, actionWidth, 55);
+    }
+    private void State(string heading, string message, bool failed, bool missingRuntime) {
+        title.Text = heading; description.Text = message; retry.Visible = failed; runtimeLink.Visible = missingRuntime;
+        recovery.Visible = true; recovery.BringToFront(); LayoutRecovery();
+    }
+    internal static bool IsDashboardUri(string value, string trustedOrigin) {
+        Uri uri, trusted;
+        return Uri.TryCreate(value, UriKind.Absolute, out uri) && Uri.TryCreate(trustedOrigin, UriKind.Absolute, out trusted) &&
+            uri.Scheme == "http" && uri.Host == "127.0.0.1" && uri.Port == trusted.Port && String.IsNullOrEmpty(uri.UserInfo);
+    }
+    private async Task<string> RunHelperAsync(string name, int timeout) {
+        using (var child = Process.Start(DesktopShell.Script(name))) {
+            preparation = child;
+            var output = child.StandardOutput.ReadToEndAsync(); var errors = child.StandardError.ReadToEndAsync();
+            bool done = await Task.Run(() => child.WaitForExit(timeout));
+            if (!done) { try { child.Kill(); } catch { } throw new IOException("Local helper timed out."); }
+            await errors; var result = await output;
+            if (child.ExitCode != 0 || result.Length > 8192) throw new IOException("Local startup was not confirmed.");
+            preparation = null; return result;
+        }
+    }
+    private string desktopCredential;
+    private bool securityBusy;
+    private async Task<Dictionary<string, object>> NativeRequestAsync(string route, object body) {
+        if (String.IsNullOrEmpty(desktopCredential)) desktopCredential = (await RunHelperAsync("native-trust.ps1", 15000)).Trim();
+        if (desktopCredential.Length != 44) throw new IOException("Desktop trust unavailable.");
+        var request = (HttpWebRequest)WebRequest.Create(origin + route);
+        request.Method = "POST"; request.ContentType = "application/json"; request.Timeout = 20000; request.ReadWriteTimeout = 20000;
+        request.AllowAutoRedirect = false; request.Proxy = null;
+        request.Headers["Origin"] = origin;
+        request.Headers["X-PC-Monitor-Desktop"] = desktopCredential;
+        request.CookieContainer = new CookieContainer();
+        var cookies = await view.CoreWebView2.CookieManager.GetCookiesAsync(origin);
+        foreach (var cookie in cookies) if (cookie.Name == "pc_monitor_session") request.CookieContainer.Add(new Cookie(cookie.Name, cookie.Value, "/", "127.0.0.1"));
+        byte[] bytes = Encoding.UTF8.GetBytes(json.Serialize(body)); request.ContentLength = bytes.Length;
+        using (var stream = await request.GetRequestStreamAsync()) await stream.WriteAsync(bytes, 0, bytes.Length);
+        using (var response = (HttpWebResponse)await request.GetResponseAsync()) {
+            using (var reader = new StreamReader(response.GetResponseStream())) {
+                var text = await reader.ReadToEndAsync();
+                if (text.Length > 4096) throw new IOException("Invalid security response.");
+                var result = json.Deserialize<Dictionary<string, object>>(text);
+                foreach (Cookie cookie in response.Cookies) if (cookie.Name == "pc_monitor_session") {
+                    var nativeCookie = view.CoreWebView2.CookieManager.CreateCookie(cookie.Name, cookie.Value, "127.0.0.1", "/");
+                    nativeCookie.IsHttpOnly = true; nativeCookie.SameSite = CoreWebView2CookieSameSiteKind.Strict;
+                    nativeCookie.Expires = DateTime.Now.AddDays(90);
+                    view.CoreWebView2.CookieManager.AddOrUpdateCookie(nativeCookie);
+                }
+                return result;
+            }
+        }
+    }
+    private async void SecurityActionAsync(string action) {
+        if (securityBusy || busy || exiting || !Visible) return;
+        securityBusy = true;
+        try {
+            var status = await NativeRequestAsync("/api/desktop/security", new { action = "status" });
+            if (action == "security-status") {
+                view.CoreWebView2.PostWebMessageAsJson(json.Serialize(new { kind = "security-state", requireDesktopPin = Convert.ToBoolean(status["requireDesktopPin"]) }));
+            } else if (action == "security-lock") {
+                await NativeRequestAsync("/api/desktop/security", new { action = "lock" });
+                view.CoreWebView2.Navigate(origin + "/");
+            } else if (action == "security-preference") {
+                bool required = Convert.ToBoolean(status["requireDesktopPin"]);
+                string message = required ? "Turn off PIN prompts in this native app? Anyone with access to this Windows account may open PC Monitor. Phone and ordinary browser access will still require your canonical PIN." : "Require your PC Monitor PIN on this PC again? You will be signed out now. Your phone uses the same PIN.";
+                if (MessageBox.Show(this, message, "Require PIN on this PC", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+                await NativeRequestAsync("/api/desktop/security", new { action = "preference", requireDesktopPin = !required, confirmed = true });
+                view.CoreWebView2.PostWebMessageAsJson(json.Serialize(new { kind = "security-state", requireDesktopPin = !required }));
+                if (!required) view.CoreWebView2.Navigate(origin + "/");
+                else MessageBox.Show(this, "PIN prompts are off for this native app only. Lock still requires your PIN before automatic access resumes.", "Security", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            } else {
+                if (MessageBox.Show(this, "Generate a new PC Monitor PIN? This signs out every device. The new PIN will be used on this PC and other devices.", "Generate New PIN", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+                var result = await NativeRequestAsync("/api/desktop/security", new { action = "rotate", confirmed = true });
+                // Native dialog only: never inject the PIN/credential into frontend JS.
+                MessageBox.Show(this, "Your new PC Monitor PIN is:\n\n" + Convert.ToString(result["pin"]) + "\n\nUse this same PIN on all your devices. Your old PIN no longer works.", "New PC Monitor PIN", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                view.CoreWebView2.Navigate(origin + "/");
+            }
+        } catch { MessageBox.Show(this, "Sign in with your PC Monitor PIN, then try again. No security change was confirmed.", "Security", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        finally { securityBusy = false; }
+    }
+    private async Task StartAsync(bool restart) {
+        if (busy || exiting) return;
+        busy = true; loading = true;
+        State("Opening PC Monitor", "Starting or reusing your local server…", false, false);
+        try {
+            if (restart) await RunHelperAsync("stop.ps1", 20000);
+            // First-run local Setup is interactive, so allow time to read/copy the PIN.
+            var result = json.Deserialize<Dictionary<string, object>>(await RunHelperAsync("desktop-host.ps1", 600000));
+            int port = Convert.ToInt32(result["port"]);
+            if (!Convert.ToBoolean(result["ready"]) || port < 1 || port > 65535) throw new IOException("Local startup was not confirmed.");
+            origin = "http://127.0.0.1:" + port;
+            if (exiting || IsDisposed) return;
+            await InitializeWebViewAsync();
+            // A real native-only credential obtains an ordinary revocable session.
+            // The default/locked state rejects it and shows the normal PIN page.
+            try { await NativeRequestAsync("/api/desktop/auth", new { }); } catch { }
+            view.CoreWebView2.Navigate(origin + "/");
+        }
+        catch (WebView2RuntimeNotFoundException) { State("Desktop runtime needed", "Install Microsoft WebView2, then try again. Your backend and phone access remain available.", true, true); }
+        catch { if (!exiting && !IsDisposed) State("Couldn’t open PC Monitor", "The local dashboard was not ready. Try again. No unrelated process was stopped.", true, false); }
+        finally { busy = false; }
+    }
+    private async Task InitializeWebViewAsync() {
+        if (initialized) return;
+        DesktopShell.AssertPlain(DesktopShell.ProfileDirectory);
+        view = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = recovery.BackColor, AllowExternalDrop = false };
+        Controls.Add(view); recovery.BringToFront();
+        desktopExit.BringToFront();
+        try {
+            var environment = await CoreWebView2Environment.CreateAsync(null, DesktopShell.ProfileDirectory);
+            await view.EnsureCoreWebView2Async(environment);
+            var core = view.CoreWebView2;
+            core.Settings.AreDevToolsEnabled = false;
+            core.Settings.AreDefaultContextMenusEnabled = false;
+            core.Settings.AreBrowserAcceleratorKeysEnabled = false;
+            core.Settings.IsStatusBarEnabled = false;
+            core.Settings.IsBuiltInErrorPageEnabled = false;
+            core.Settings.IsPasswordAutosaveEnabled = false;
+            core.Settings.IsGeneralAutofillEnabled = false;
+            core.Settings.IsWebMessageEnabled = true;
+            core.Settings.AreHostObjectsAllowed = false;
+            core.Settings.IsNonClientRegionSupportEnabled = true;
+            // Presentation only; no auth/command bridge and no duplicate UI.
+            await core.AddScriptToExecuteOnDocumentCreatedAsync("document.addEventListener('DOMContentLoaded',()=>{document.documentElement.classList.add('native-shell');document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>e.preventDefault())},{once:true})");
+            core.WebMessageReceived += delegate(object sender, CoreWebView2WebMessageReceivedEventArgs e) {
+                if (!IsDashboardUri(e.Source, origin)) return;
+                try {
+                    string message = e.TryGetWebMessageAsString();
+                    if (message == "security-preference" || message == "security-rotate" || message == "security-status" || message == "security-lock") { SecurityActionAsync(message); return; }
+                    if (addressRequest != null) addressRequest.TrySetResult(message);
+                } catch { }
+            };
+            core.NavigationStarting += delegate(object sender, CoreWebView2NavigationStartingEventArgs e) {
+                if (IsDashboardUri(e.Uri, origin)) return;
+                e.Cancel = true; if (e.IsUserInitiated) External(e.Uri);
+            };
+            core.NewWindowRequested += delegate(object sender, CoreWebView2NewWindowRequestedEventArgs e) { e.Handled = true; if (e.IsUserInitiated) External(e.Uri); };
+            core.PermissionRequested += delegate(object sender, CoreWebView2PermissionRequestedEventArgs e) { e.State = CoreWebView2PermissionState.Deny; };
+            core.DownloadStarting += delegate(object sender, CoreWebView2DownloadStartingEventArgs e) { e.Cancel = true; };
+            core.ProcessFailed += delegate { if (exiting || IsDisposed) return; State("Desktop view interrupted", "Try again to reopen the dashboard. Your backend remains available to other devices.", true, false); initialized = false; view.Dispose(); view = null; };
+            core.NavigationCompleted += delegate(object sender, CoreWebView2NavigationCompletedEventArgs e) {
+                loading = false;
+                if (e.IsSuccess) { recovery.Visible = false; desktopExit.BringToFront(); QueueVisibility(); }
+                else State("Dashboard unavailable", "The backend may have restarted. Try again to reopen PC Monitor.", true, false);
+            };
+            initialized = true;
+        } catch { view.Dispose(); view = null; throw; }
+    }
+    private async void QueueVisibility() {
+        if (!initialized || view == null || loading || visibilityPending || exiting) return;
+        visibilityPending = true;
+        try {
+            bool active;
+            do {
+                active = Visible && WindowState != FormWindowState.Minimized;
+                await SetClientVisibilityAsync(active);
+            } while (active != (Visible && WindowState != FormWindowState.Minimized) && !exiting && !IsDisposed);
+        } catch { } finally { visibilityPending = false; }
+    }
+    private async Task SetClientVisibilityAsync(bool active) {
+        if (active) view.Visible = true;
+        view.CoreWebView2.Resume();
+        if (active) await Task.Delay(50);
+        // Fixed client event invokes the SAME frontend lease lifecycle as the web.
+        await view.CoreWebView2.ExecuteScriptAsync("window.dispatchEvent(new CustomEvent('pc-monitor-desktop-visibility',{detail:{visible:" + (active ? "true" : "false") + "}}))");
+        view.Visible = active;
+        // Let the existing release beacon finish. Hidden clients have no lease,
+        // SSE or fallback/maintenance polling; don't block reopen on Chromium's
+        // optional suspension operation (which can wait on outstanding work).
+        if (!active) await Task.Delay(200);
+    }
+    private static void External(string address) {
+        Uri uri;
+        if (!Uri.TryCreate(address, UriKind.Absolute, out uri) || (uri.Scheme != "https" && uri.Scheme != "http") || !String.IsNullOrEmpty(uri.UserInfo)) return;
+        try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); } catch { }
+    }
+    private async Task CopyAddressAsync() {
+        if (origin == null || addressRequest != null) return;
+        string address = null;
+        try {
+            if (initialized && view != null) {
+                // User-triggered, same-origin authenticated existing diagnostics. No cookie extraction.
+                view.CoreWebView2.Resume();
+                addressRequest = new TaskCompletionSource<string>();
+                await view.CoreWebView2.ExecuteScriptAsync("void(async()=>{let a='';try{const r=await fetch('/api/diagnostics');if(r.ok){const d=await r.json(),c=d.checks||[];if(c.find(x=>x.id==='tailscale-status')?.value==='Running')a=c.find(x=>x.id==='tailscale-ip')?.value||''}}catch{}chrome.webview.postMessage(a)})()");
+                var completed = await Task.WhenAny(addressRequest.Task, Task.Delay(5000));
+                string candidate = completed == addressRequest.Task ? addressRequest.Task.Result : "";
+                System.Net.IPAddress ip; byte[] bytes;
+                if (System.Net.IPAddress.TryParse(candidate, out ip) && (bytes = ip.GetAddressBytes()).Length == 4 && bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127)
+                    address = "http://" + ip + ":" + new Uri(origin).Port;
+            }
+        } catch { } finally { addressRequest = null; }
+        try {
+            if (address == null) tray.ShowBalloonTip(2500, "Mobile address unavailable", "Log in to PC Monitor and connect Tailscale, then try again. Your clipboard was not changed.", ToolTipIcon.Info);
+            else { Clipboard.SetText(address); tray.ShowBalloonTip(2500, "Mobile address copied", "Connect your phone to Tailscale and enter your PC Monitor PIN.", ToolTipIcon.Info); }
+        } catch { }
+        QueueVisibility();
+    }
+    private void RestoreBoundsFromDisk() {
+        try {
+            DesktopShell.AssertPlain(DesktopShell.DataDirectory);
+            string file = Path.Combine(DesktopShell.DataDirectory, "desktop-window.json");
+            if (!File.Exists(file) || new FileInfo(file).Length > 1024 || (File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) return;
+            var value = json.Deserialize<Dictionary<string, int>>(File.ReadAllText(file));
+            var area = Screen.PrimaryScreen.WorkingArea;
+            int width = Math.Min(area.Width, Math.Max(760, value["width"])), height = Math.Min(area.Height, Math.Max(560, value["height"]));
+            var saved = new Rectangle(value["x"], value["y"], width, height);
+            foreach (var screen in Screen.AllScreens) if (screen.WorkingArea.Contains(saved)) { Bounds = saved; StartPosition = FormStartPosition.Manual; break; }
+            if (value["maximized"] == 1) WindowState = FormWindowState.Maximized;
+        } catch { }
+    }
+    private void SaveBounds() {
+        try {
+            DesktopShell.AssertPlain(DesktopShell.DataDirectory);
+            Directory.CreateDirectory(DesktopShell.DataDirectory);
+            var file = Path.Combine(DesktopShell.DataDirectory, "desktop-window.json");
+            if (File.Exists(file) && (File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) return;
+            var temp = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try {
+                using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write))
+                using (var writer = new StreamWriter(stream)) writer.Write(json.Serialize(new { x = normalBounds.X, y = normalBounds.Y, width = normalBounds.Width, height = normalBounds.Height, maximized = wasMaximized ? 1 : 0 }));
+                if (File.Exists(file)) File.Replace(temp, file, null); else File.Move(temp, file);
+            } finally { if (File.Exists(temp)) File.Delete(temp); }
+        } catch { }
+    }
+}

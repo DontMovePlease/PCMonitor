@@ -1,0 +1,16 @@
+param([switch]$Setup)
+$ErrorActionPreference = 'Stop'
+$appDir = Split-Path -Parent $PSScriptRoot
+$dataDir = Join-Path (Split-Path -Parent $appDir) 'data'
+& (Join-Path $PSScriptRoot 'start.ps1') | Out-Null
+. (Join-Path $PSScriptRoot 'dashboard-runtime.ps1')
+$runtime = Get-DashboardRuntime $appDir
+if ($runtime.state -ne 'owned' -or -not $runtime.healthy) {
+    try { [IO.File]::AppendAllText((Join-Path $dataDir 'launcher-error.log'), "[Launcher] Dashboard was not ready: $($runtime.state); $($runtime.reason)`r`n") } catch { }
+    Add-Type -AssemblyName System.Windows.Forms
+    [Windows.Forms.MessageBox]::Show('PC Monitor could not start safely. An existing instance may still be starting, or ports 7331-7335 may be unavailable. Try again shortly; no other process was stopped.', 'PC Monitor') | Out-Null
+    exit 1
+}
+if ($Setup) { & (Join-Path $PSScriptRoot 'setup.ps1') -Hosted; Start-Process -FilePath (Join-Path $appDir 'PCMonitor.exe') -WorkingDirectory $appDir; return }
+if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'onboarding-complete.json'))) { & (Join-Path $PSScriptRoot 'setup.ps1') -Automatic; return }
+& (Join-Path $PSScriptRoot 'desktop.ps1')

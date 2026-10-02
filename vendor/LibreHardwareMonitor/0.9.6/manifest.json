@@ -1,0 +1,81 @@
+{
+  "release": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/tag/v0.9.6",
+  "target": "net472",
+  "project": "LibreHardwareMonitor",
+  "archive": "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.6/LibreHardwareMonitor.zip",
+  "archiveSha256": "086d9f1b5a99e643edc2cfaaac16051685b551e4c5ac0b32a57c58c0e529c001",
+  "sources": [
+    {
+      "file": "source/BlackSharp.zip",
+      "sha256": "e7655efda8518bcdde88c50c693b0e9ba74b68f11265e4965b24772620aa1827"
+    },
+    {
+      "file": "source/DiskInfoToolkit.zip",
+      "sha256": "df22e4b64602e66ba6b4adfe0b32830e15a8c3652d7eefcff43e7811e8752b23"
+    },
+    {
+      "file": "source/HidSharp.zip",
+      "sha256": "399c3c820a09649d1df9fab761fa2092acf0fba43c7c28d828f64fe1d2710905"
+    },
+    {
+      "file": "source/LibreHardwareMonitor.zip",
+      "sha256": "28100b87fcd7a9a213c58fabe1174e4f3064975b5ab11799224766993ca1fbfc"
+    },
+    {
+      "file": "source/PawnIO.Modules.zip",
+      "sha256": "26ec69b610968a32cdc90139ef75fac22f50188d920c0faa3f454210258ed781"
+    },
+    {
+      "file": "source/RAMSPDToolkit.zip",
+      "sha256": "653280a709959574ab67d3f04ee8772bdca8b08e860f017ca03819627f4eeedc"
+    }
+  ],
+  "version": "0.9.6",
+  "files": [
+    {
+      "file": "BlackSharp.Core.dll",
+      "version": "1.0.7",
+      "sha256": "cafb93afcc8d8a367e21f619673d05c06887d8964867fed1371f02ded1cd3e23"
+    },
+    {
+      "file": "DiskInfoToolkit.dll",
+      "version": "1.1.2",
+      "sha256": "1acbf51b3c10c51c986cf43021680d34a2e38d9a5ba652bcfa9a1b5f7fc09800"
+    },
+    {
+      "file": "HidSharp.dll",
+      "version": "2.6.4.0",
+      "sha256": "d86690efde30ea9179f669320f39148853793b743a98b531afeaf30598e22f54"
+    },
+    {
+      "file": "LibreHardwareMonitorLib.dll",
+      "version": "0.9.6.0",
+      "sha256": "6ebc194316536ba61af5be24508ad9fcbb2ecc685e716c12e787c79530f66bf0"
+    },
+    {
+      "file": "RAMSPDToolkit-NDD.dll",
+      "version": "1.4.2",
+      "sha256": "b6882354c7c8ec186617e421507743dbfae09c5c1fc24cef76a1d0c0c26651de"
+    },
+    {
+      "file": "System.Buffers.dll",
+      "version": "4.600.125.16908",
+      "sha256": "2d78d770c9cb997199154ae8c018b9f1d1efbc86729f7264dde6dbad2a12cac3"
+    },
+    {
+      "file": "System.Memory.dll",
+      "version": "4.600.325.20307",
+      "sha256": "d5e8e4866f9cfa66f7765660f84b210198893e55335487afe5ebda342c0e913d"
+    },
+    {
+      "file": "System.Numerics.Vectors.dll",
+      "version": "4.600.125.16908",
+      "sha256": "20c2fa81b8c70d651099d762954f285fd4f942e63b2d7217c145dab8d4b2f4c9"
+    },
+    {
+      "file": "System.Runtime.CompilerServices.Unsafe.dll",
+      "version": "6.100.225.20307",
+      "sha256": "08cbd7278b66f1e68425a82d4b97181a4130d93e3dd91831407aba7212ccdacf"
+    }
+  ]
+}

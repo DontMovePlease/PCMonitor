@@ -1,0 +1,52 @@
+/* ── PC Monitor — desktop layout ─────────────────────────────────────────────
+   Loaded only by index.html and scoped entirely to desktop viewports, so the
+   phone UI is unaffected. Presentation only: the same DOM, app.js, SSE stream,
+   monitoring leases, authentication, and adaptive sampling are reused as-is. */
+
+@media (min-width: 1024px) {
+  /* Wider horizontal gutters only; top/bottom rhythm stays as on phone. */
+  body {
+    padding-left: 30px;
+    padding-right: 30px;
+  }
+
+  .dashboard-container {
+    max-width: 1180px;
+  }
+
+  /* Dashboard summary and Host Information share the available width. */
+  #dashboardPage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  #dashboardPage > .health-card,
+  #dashboardPage > .metrics-grid {
+    grid-column: 1 / -1;
+  }
+
+  #dashboardPage > .system-specs-card {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  /* Both width and max-width must be lifted: the base rule caps each. */
+  .cpu-detail-dialog {
+    width: min(860px, calc(100vw - 28px));
+    max-width: 860px;
+  }
+
+}
+
+@media (min-width: 1280px) {
+  .dashboard-container {
+    max-width: 1360px;
+  }
+
+  /* Keep the four primary hardware cards in the same compact 2×2 rhythm as
+     the base Overview layout. The secondary Network card owns the row below. */
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
