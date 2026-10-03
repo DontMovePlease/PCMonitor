@@ -14,7 +14,7 @@ are not enabled. The helper enables **CPU hardware only**.
 
 Keep this entire directory, including notices and source archives, with distributed
 copies. Libraries are separate, unmodified components; their licenses do not change
-the license of PC Monitor's independently written code.
+the license of Rovarin's independently written code.
 
 | Component | Source revision | License / notices |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ the license of PC Monitor's independently written code.
 module update is identified by upstream commit
 `4b3ed8bb4623128927480aaa8cdf0d9e09ebc999`, referencing PawnIO.Modules 0.2.2.
 Build instructions and project files are retained in the archives. Use the upstream
-LHM project to rebuild/relink the library with modified module sources. PC Monitor
+LHM project to rebuild/relink the library with modified module sources. Rovarin
 places no restriction on modifying, replacing, or debugging these components for
 personal use under their licenses. Remote clients cannot choose library paths.
 Review upstream module signing/driver restrictions before redistributing modified
@@ -41,7 +41,7 @@ module builds; do not bypass Windows driver protections.
 Windows PowerShell 5.1 and the Windows .NET Framework runtime load the fixed helper.
 LHM v0.9.6 needs an already installed **PawnIO** driver for CPU sensor access.
 The sensor helper checks this prerequisite and never installs a driver or service.
-PC Monitor separately offers explicit optional Enhanced support: the unmodified,
+Rovarin separately offers explicit optional Enhanced support: the unmodified,
 hash-pinned and signature-verified official PawnIO installer through Windows UAC,
 during setup or from the authenticated local desktop. Remote clients cannot install it.
 Sensor access can also require administrator privileges. Missing prerequisites are
@@ -56,4 +56,4 @@ provider on the next active sample.
 
 The Windows package includes these assets/notices/source archives and explains the
 optional driver/elevation prerequisite separately. Shared PawnIO is not removed by
-PC Monitor uninstall.
+Rovarin uninstall.

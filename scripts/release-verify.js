@@ -22,7 +22,7 @@ function assertPlain(directory) {
 }
 async function verifyAndPublish(repo, runner = run) {
   repo = path.resolve(repo);
-  const exe = path.join(repo, 'dist/PCMonitorSetup.exe');
+  const exe = path.join(repo, 'dist/RovarinSetup.exe');
   assertPlain(exe);
   const hash = digest(exe);
   const manifestPath = path.join(repo, 'packaging/payload-manifest.json');
@@ -34,7 +34,7 @@ async function verifyAndPublish(repo, runner = run) {
   function checkSource() {
     if (digest(exe) !== hash || digest(manifestPath) !== manifestHash) throw new Error('Build changed during verification; publish was not changed.');
     for (const input of build.inputs) {
-      if (!['packaging/build.ps1','packaging/PCMonitor.iss','packaging/PCMonitorLauncher.cs','packaging/DesktopShell.cs','packaging/desktop.manifest','packaging/create-icon.ps1'].includes(input.path) || digest(path.join(repo,input.path)) !== input.sha256) throw new Error('Installer source changed; rebuild before publishing.');
+      if (!['packaging/build.ps1','packaging/Rovarin.iss','packaging/RovarinLauncher.cs','packaging/DesktopShell.cs','packaging/desktop.manifest','packaging/create-icon.ps1'].includes(input.path) || digest(path.join(repo,input.path)) !== input.sha256) throw new Error('Installer source changed; rebuild before publishing.');
     }
     for (const entry of manifest.files) {
       if (digest(path.join(repo, 'packaging/payload', entry.path)) !== entry.sha256) throw new Error('Payload changed; rebuild before publishing.');
@@ -50,8 +50,10 @@ async function verifyAndPublish(repo, runner = run) {
   checkSource();
   const publish = path.join(repo, 'publish');
   assertPlain(publish);
-  const allowed = ['PCMonitorSetup.exe','PCMonitorSetup.sha256','release.json'];
-  if (fs.existsSync(publish) && fs.readdirSync(publish).some(name => !allowed.includes(name) || !fs.lstatSync(path.join(publish,name)).isFile() || fs.lstatSync(path.join(publish,name)).isSymbolicLink())) throw new Error('Publish contains unrelated files; refusing replacement.');
+  const allowed = ['RovarinSetup.exe','RovarinSetup.sha256','release.json'];
+  // Previous verified product bytes are retired only AFTER the new gate passes.
+  const previousAllowed = [...allowed, 'PCMonitorSetup.exe', 'PCMonitorSetup.sha256'];
+  if (fs.existsSync(publish) && fs.readdirSync(publish).some(name => !previousAllowed.includes(name) || !fs.lstatSync(path.join(publish,name)).isFile() || fs.lstatSync(path.join(publish,name)).isSymbolicLink())) throw new Error('Publish contains unrelated files; refusing replacement.');
   const suffix = crypto.randomBytes(8).toString('hex');
   const staging = path.join(repo, 'publish-staging-' + suffix);
   const previous = path.join(repo, 'publish-previous-' + suffix);
@@ -60,7 +62,7 @@ async function verifyAndPublish(repo, runner = run) {
     assertPlain(directory);
     if (!fs.existsSync(directory)) return;
     for (const name of fs.readdirSync(directory)) {
-      if (!allowed.includes(name)) throw new Error('Unexpected promotion file.');
+      if (!(directory === previous ? previousAllowed : allowed).includes(name)) throw new Error('Unexpected promotion file.');
       fs.unlinkSync(path.join(directory,name));
     }
     fs.rmdirSync(directory);
@@ -68,7 +70,7 @@ async function verifyAndPublish(repo, runner = run) {
   try {
     fs.copyFileSync(exe, path.join(staging, allowed[0]));
     if (digest(path.join(staging, allowed[0])) !== hash) throw new Error('Copy mismatch; publish was not changed.');
-    fs.writeFileSync(path.join(staging, allowed[1]), `${hash}  PCMonitorSetup.exe\n`);
+    fs.writeFileSync(path.join(staging, allowed[1]), `${hash}  RovarinSetup.exe\n`);
     const version = JSON.parse(fs.readFileSync(path.join(repo,'package.json'))).version;
     fs.writeFileSync(path.join(staging, allowed[2]), JSON.stringify({ version, builtAt: build.builtAt, verifiedAt: new Date().toISOString(), sha256: hash, payloadManifestSha256: manifestHash, signing: 'unsigned', suites: [...SUITES, 'installer-integration'] }, null, 2) + '\n');
     checkSource();

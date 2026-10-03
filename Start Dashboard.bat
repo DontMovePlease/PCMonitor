@@ -1,8 +1,8 @@
 @echo off
-title Start PC Monitor Dashboard
+title Start Rovarin Dashboard
 cd /d "%~dp0"
 echo ======================================================
-echo    Starting PC Monitor Dashboard in Background
+echo    Starting Rovarin Dashboard in Background
 echo ======================================================
 echo.
 

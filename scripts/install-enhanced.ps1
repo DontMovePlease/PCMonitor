@@ -51,18 +51,18 @@ try {
     [IO.File]::WriteAllText($record, ($result | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding($false)))
 } catch { } finally { if ($operationLock) { $operationLock.Dispose() } }
 function Get-EnhancedInstallMessage($result) {
-    $message = if ($result.exitCode -eq 0) { 'Enhanced hardware support installer completed successfully. CPU sensor availability is checked separately in the dashboard; virtual machines may have no compatible sensor. PC Monitor is ready to use.' }
-      elseif ($result.exitCode -in @(3010,1641)) { 'Enhanced hardware support was installed. Restart Windows to finish setup. PC Monitor remains usable now.' }
-      elseif ($result.exitCode -in @(1223,1602)) { 'Enhanced installation was cancelled. PC Monitor remains usable without CPU temperature.' }
-      elseif ($result.exitCode -eq 1460) { 'The Enhanced installer has not returned a confirmed result. Check Windows; restart Windows before retrying. PC Monitor remains usable.' }
-      elseif ($result.failureCode -eq 'package-invalid') { 'Enhanced installer signature, hash or version verification failed. Nothing was installed. PC Monitor remains usable.' }
-      elseif ($result.failureCode -eq 'package-unavailable') { 'The trusted Enhanced installer is unavailable. PC Monitor remains usable.' }
-      elseif ($result.failureCode -eq 'launch-failed') { 'The trusted Enhanced installer could not launch. PC Monitor remains usable.' }
-      else { 'Enhanced hardware support installation failed (installer exit ' + $result.exitCode + '). PC Monitor remains usable without CPU temperature.' }
+    $message = if ($result.exitCode -eq 0) { 'Enhanced hardware support installer completed successfully. CPU sensor availability is checked separately in the dashboard; virtual machines may have no compatible sensor. Rovarin is ready to use.' }
+      elseif ($result.exitCode -in @(3010,1641)) { 'Enhanced hardware support was installed. Restart Windows to finish setup. Rovarin remains usable now.' }
+      elseif ($result.exitCode -in @(1223,1602)) { 'Enhanced installation was cancelled. Rovarin remains usable without CPU temperature.' }
+      elseif ($result.exitCode -eq 1460) { 'The Enhanced installer has not returned a confirmed result. Check Windows; restart Windows before retrying. Rovarin remains usable.' }
+      elseif ($result.failureCode -eq 'package-invalid') { 'Enhanced installer signature, hash or version verification failed. Nothing was installed. Rovarin remains usable.' }
+      elseif ($result.failureCode -eq 'package-unavailable') { 'The trusted Enhanced installer is unavailable. Rovarin remains usable.' }
+      elseif ($result.failureCode -eq 'launch-failed') { 'The trusted Enhanced installer could not launch. Rovarin remains usable.' }
+      else { 'Enhanced hardware support installation failed (installer exit ' + $result.exitCode + '). Rovarin remains usable without CPU temperature.' }
     return $message
 }
 if ($Notify) {
     Add-Type -AssemblyName System.Windows.Forms
-    [Windows.Forms.MessageBox]::Show((Get-EnhancedInstallMessage $result), 'PC Monitor - Enhanced Support') | Out-Null
+    [Windows.Forms.MessageBox]::Show((Get-EnhancedInstallMessage $result), 'Rovarin - Enhanced Support') | Out-Null
 }
 $result | ConvertTo-Json -Compress

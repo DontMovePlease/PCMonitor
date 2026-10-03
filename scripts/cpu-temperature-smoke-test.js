@@ -17,7 +17,7 @@ async function testProvider() {
   assert.strictEqual(selectCpuSensor([cpu('CPU Core', 70)]).value, 70, 'single-core sensors remain supported');
   assert.strictEqual(selectCpuSensor([cpu('CPU Core #1 Distance to TjMax', 70)]), null, 'distance-to-limit is not temperature');
   for (const value of [null, '', NaN, Infinity, -1, 126]) assert.strictEqual(selectCpuSensor([cpu('CPU Package', value)]), null);
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-monitor-temperature-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rovarin-temperature-'));
   try {
     let now = Date.now(), calls = 0;
     const settingsFile = path.join(directory, 'settings.json');

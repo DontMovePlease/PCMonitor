@@ -22,6 +22,7 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const enhancedSupport = new EnhancedSupport({ stateDirectory: DATA_DIR });
 const uninstallManager = new UninstallManager();
+// Opaque compatibility identifiers retain existing clients and desktop trust.
 const AUTH_COOKIE = 'pc_monitor_session';
 const SESSION_TTL_MS = readBoundedDuration(process.env.PC_MONITOR_SESSION_TTL_MS, 90 * 24 * 60 * 60 * 1000, 1000, 90 * 24 * 60 * 60 * 1000);
 const MAX_SESSIONS = 64;
@@ -740,7 +741,7 @@ async function collectDiagnostics() {
     diagnosticCheck('windows', 'Windows version / edition', windows ? 'supported' : 'unavailable', windowsCaptionDetected ? 'Detected Windows edition; build ' + os.release() : 'Edition unconfirmed; native OS release shown.', windowsCaptionDetected ? systemInfo.windowsVersion : os.type() + ' ' + os.release(), true),
     diagnosticCheck('os-architecture', 'OS architecture', 'supported', 'Native machine architecture; Node runtime architecture: ' + process.arch, os.machine()),
     diagnosticCheck('node-runtime', 'Node.js runtime', 'supported', 'Current server runtime.', process.version, true),
-    diagnosticCheck('server-version', 'PC Monitor version', 'supported', 'Version declared in package.json.', require('./package.json').version),
+    diagnosticCheck('server-version', 'Rovarin version', 'supported', 'Version declared in package.json.', require('./package.json').version),
     diagnosticCheck('server-port', 'Server port', bindingState.status === 'listening' ? 'supported' : 'failed', 'Preferred port: ' + bindingState.preferredPort + '; active port: ' + actualPort + '; fallback required: ' + (bindingState.fallbackRequired ? 'yes' : 'no') + '.', actualPort, true),
     diagnosticCheck('default-port', 'Default port 7331', 'supported', 'Requested: ' + (Number(PORT) === 7331 ? 'yes' : 'no') + '; used: ' + (actualPort === 7331 ? 'yes' : 'no') + '.', { requested: Number(PORT) === 7331, used: actualPort === 7331 }),
     ...tailscale, ...nvidia,
@@ -769,14 +770,14 @@ function cpuTemperatureDiagnostics() {
   const support = enhancedSupport.status(enhanced);
   return [
     diagnosticCheck('enhanced-driver', 'Enhanced hardware support (PawnIO)', support.driverInstalled === true ? 'supported' : support.driverStatus === 'failed' ? 'failed' : 'unavailable', support.driverInstalled === true ? 'Driver installed; this does not guarantee compatible CPU sensors.' : support.driverInstalled === false ? 'Optional driver not installed; core monitoring remains usable.' : 'Optional driver detection unavailable or failed.', support.driverInstalled === null ? 'Unconfirmed' : support.driverInstalled ? 'Installed' : 'Not installed'),
-    diagnosticCheck('enhanced-installation', 'Enhanced installation result', support.result?.success ? 'supported' : support.result ? 'failed' : 'unavailable', support.result?.message || support.result?.error || 'No PC Monitor installation result recorded.', support.result?.code || 'Not attempted'),
+    diagnosticCheck('enhanced-installation', 'Enhanced installation result', support.result?.success ? 'supported' : support.result ? 'failed' : 'unavailable', support.result?.message || support.result?.error || 'No Rovarin installation result recorded.', support.result?.code || 'Not attempted'),
     diagnosticCheck('cpu-temperature', state.mode === 'thermal-zone' ? 'System thermal zone' : 'CPU temperature', status, state.note, state.sensorName ? state.sensorName + ' · ' + state.temperatureC + '°C' : state.status),
     diagnosticCheck('temperature-mode', 'Temperature mode', 'supported', 'Optional, lease-driven sampling at 20 seconds; Off stops this sampler.', state.mode),
     diagnosticCheck('enhanced-temperature-provider', 'Enhanced provider assets', settings.enhancedAssetsAvailable ? 'supported' : 'unavailable', 'Official LibreHardwareMonitor ' + settings.enhancedVersion + ' (MPL-2.0); CPU-only helper. Assets do not guarantee sensor access.', settings.enhancedAssetsAvailable ? 'Bundled ' + settings.enhancedVersion : 'Missing'),
     diagnosticCheck('enhanced-cpu-sensors', 'Enhanced CPU sensors', enhanced?.status === 'available' ? 'supported' : enhanced?.status === 'failed' ? 'failed' : 'unavailable', enhanced?.note || 'Not sampled; requires Enhanced mode with an active lease.', enhanced?.sensorName || enhanced?.status || 'Not sampled'),
     diagnosticCheck('cpu-temperature-sensor', 'Selected temperature sensor', status, state.sensorType === 'system-thermal-zone' ? 'ACPI firmware zone; not verified as CPU package. CPU alerts disabled.' : state.note, state.sensorName),
     diagnosticCheck('thermal-zone', 'Windows thermal-zone capability', thermal?.status === 'available' ? 'supported' : thermal?.status === 'failed' ? 'failed' : 'unavailable', 'Experimental ACPI/CIM source; only probed when selected with a lease. May represent a broader system zone.', thermal?.status || 'Not sampled'),
-    diagnosticCheck('temperature-permissions', 'Enhanced sensor access', enhanced?.pawnIoInstalled === false ? 'unavailable' : enhanced?.code === 'access-denied' ? 'failed' : typeof enhanced?.admin === 'boolean' ? 'supported' : 'unavailable', 'Enhanced CPU sensors require an installed PawnIO driver and may require elevation; last Enhanced probe shown. PC Monitor does not install drivers.', enhanced?.pawnIoInstalled === false ? 'PawnIO not installed' : typeof enhanced?.admin === 'boolean' ? enhanced.admin ? 'Administrator' : 'Standard user' : 'Not sampled')
+    diagnosticCheck('temperature-permissions', 'Enhanced sensor access', enhanced?.pawnIoInstalled === false ? 'unavailable' : enhanced?.code === 'access-denied' ? 'failed' : typeof enhanced?.admin === 'boolean' ? 'supported' : 'unavailable', 'Enhanced CPU sensors require an installed PawnIO driver and may require elevation; last Enhanced probe shown. Rovarin does not install drivers.', enhanced?.pawnIoInstalled === false ? 'PawnIO not installed' : typeof enhanced?.admin === 'boolean' ? enhanced.admin ? 'Administrator' : 'Standard user' : 'Not sampled')
   ];
 }
 
@@ -1401,7 +1402,7 @@ const server = http.createServer((req, res) => {
         if (!refreshAccessPin()) { reply(503, { success: false, error: 'Access configuration unavailable.' }); return; }
         if (pathname === '/api/desktop/auth') {
           if (Object.keys(data).length) { reply(400, { success: false, error: 'Invalid request.' }); return; }
-          if (config.requireDesktopPin !== false || config.desktopLocked) { reply(401, { success: false, error: 'Enter your PC Monitor PIN.' }); return; }
+          if (config.requireDesktopPin !== false || config.desktopLocked) { reply(401, { success: false, error: 'Enter your Rovarin PIN.' }); return; }
           if (getAuthenticatedSession(req)) { reply(200, { success: true }); return; }
           issueSession(req, res, true); return;
         }
@@ -1488,7 +1489,7 @@ const server = http.createServer((req, res) => {
     if (!session) { res.writeHead(401, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: false, error: 'Authentication required.' })); return; }
     if (session.desktopAutomatic) {
       try { writeConfig(CONFIG_FILE, { ...readConfig(CONFIG_FILE), desktopLocked: true }); refreshAccessPin(); }
-      catch (_) { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: false, error: 'Could not lock PC Monitor.' })); return; }
+      catch (_) { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ success: false, error: 'Could not lock Rovarin.' })); return; }
     }
     revokeSession(session);
     res.writeHead(200, { 'Content-Type': 'application/json', 'Set-Cookie': [
@@ -1582,8 +1583,8 @@ const server = http.createServer((req, res) => {
             };
             finishExit();
           });
-          reply(202, { success: true, code: 'uninstall-accepted', message: 'Uninstall accepted. PC Monitor will become unreachable. Check Windows Apps if removal does not complete.' });
-        } catch (_) { await handoff?.abort().catch(() => {}); uninstallManager.busy = false; reply(503, { success: false, code: 'handoff-unavailable', error: 'Could not safely start uninstall. PC Monitor is still running; use Windows Installed apps.' }); }
+          reply(202, { success: true, code: 'uninstall-accepted', message: 'Uninstall accepted. Rovarin will become unreachable. Check Windows Apps if removal does not complete.' });
+        } catch (_) { await handoff?.abort().catch(() => {}); uninstallManager.busy = false; reply(503, { success: false, code: 'handoff-unavailable', error: 'Could not safely start uninstall. Rovarin is still running; use Windows Installed apps.' }); }
       });
     });
     return;
@@ -1594,7 +1595,7 @@ const server = http.createServer((req, res) => {
     if (parsedUrl.search) { reply(400, { success: false, code: 'invalid-request', error: 'Unexpected parameters.' }); return; }
     const local = isLocalDesktopRequest(req);
     if (!isEnhancedInstallPost) { enhancedSupport.detectDriver().then(()=>{ if(!getAuthenticatedSession(req)){reply(401,{success:false,code:'authentication-required'});return;} reply(200, { ...enhancedSupport.status(cpuTemperatureProvider.settings().observations.enhanced), localDesktop: local }); }); return; }
-    if (!local) { reply(403, { success: false, code: 'local-only', error: 'Install Enhanced support from the PC Monitor desktop dashboard.' }); return; }
+    if (!local) { reply(403, { success: false, code: 'local-only', error: 'Install Enhanced support from the Rovarin desktop dashboard.' }); return; }
     if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) { reply(415, { success: false, code: 'invalid-content-type', error: 'JSON required.' }); return; }
     readRequestBody(req, 128, (error, body) => {
       let data; try { data = JSON.parse(body); } catch (_) {}
@@ -1887,7 +1888,7 @@ const server = http.createServer((req, res) => {
       // Self-protection: the active server, its parent (dev watcher/launcher),
       // and system PIDs are never terminable through this endpoint.
       if (PROTECTED_PROCESS_PIDS.has(pid) || pid < 5) {
-        return failKill(403, 'protected-process', 'The PC Monitor server process cannot be terminated.');
+        return failKill(403, 'protected-process', 'The Rovarin server process cannot be terminated.');
       }
       if (CRITICAL_PROCESS_NAMES.has(name.toLowerCase())) {
         return failKill(403, 'protected-process', 'This Windows system process is protected.');
@@ -2083,7 +2084,7 @@ bindServer(server, PORT, bindingState, () => {
   const boundPort = server.address().port;
   const tailscaleIp = getTailscaleIP() || '100.x.x.x (Tailscale not connected)';
   console.log(`\n======================================================`);
-  console.log(`🚀 PC Monitor Dashboard is running!`);
+  console.log(`🚀 Rovarin Dashboard is running!`);
   console.log(`🔒 Tailscale access: http://${tailscaleIp}:${boundPort} (PIN required)`);
   console.log(`💻 Localhost access: http://127.0.0.1:${boundPort}`);
   console.log(`======================================================\n`);

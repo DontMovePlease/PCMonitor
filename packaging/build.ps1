@@ -23,7 +23,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $cache 'Node-LICENSE'))) { Invoke-We
 $resolvedPayload = [IO.Path]::GetFullPath($payload)
 if ($resolvedPayload -ne [IO.Path]::GetFullPath((Join-Path $repo 'packaging\payload'))) { throw 'Unsafe payload path.' }
 foreach ($localState in @('data','desktop-profile')) {
-    if (Test-Path -LiteralPath (Join-Path $payload $localState)) { throw 'Generated payload contains local application data. Close its owned app/backend and preserve that data outside the payload before rebuilding. Use the installed PC Monitor for normal desktop access.' }
+    if (Test-Path -LiteralPath (Join-Path $payload $localState)) { throw 'Generated payload contains local application data. Close its owned app/backend and preserve that data outside the payload before rebuilding. Use the installed Rovarin for normal desktop access.' }
 }
 if (Test-Path -LiteralPath $payload) { Remove-Item -LiteralPath $payload -Recurse -Force }
 $app = Join-Path $payload 'app'
@@ -31,7 +31,7 @@ $runtime = Join-Path $payload 'runtime'
 New-Item -ItemType Directory -Force -Path $app,$runtime,(Join-Path $app 'scripts'),(Join-Path $app 'public'),(Join-Path $app 'vendor\PawnIO\2.2.0') | Out-Null
 $rootFiles = @('server.js','server-lifecycle.js','pin-manager.js','process-termination.js','enhanced-support.js','uninstall-manager.js','process-stats.js','maintenance.js','temperature-manager.js','cpu-temperature-provider.js','package.json','run_hidden.vbs','LICENSE')
 foreach ($name in $rootFiles) { Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $app }
-$scripts = @('start.ps1','stop.ps1','desktop.ps1','desktop-host.ps1','native-trust.ps1','dashboard-runtime.ps1','installed-start.ps1','installed-desktop.ps1','setup.ps1','phone-qr.js','empty-recycle-bin.ps1','install-enhanced.ps1','installed-uninstall.ps1','cpu-temperature-provider.ps1','terminate-process.ps1')
+$scripts = @('start.ps1','stop.ps1','desktop.ps1','desktop-host.ps1','native-trust.ps1','dashboard-runtime.ps1','installed-start.ps1','installed-desktop.ps1','setup.ps1','phone-qr.js','empty-recycle-bin.ps1','install-enhanced.ps1','installed-uninstall.ps1','rebrand-migration.ps1','cpu-temperature-provider.ps1','terminate-process.ps1')
 foreach ($name in $scripts) { Copy-Item -LiteralPath (Join-Path $repo "scripts\$name") -Destination (Join-Path $app 'scripts') }
 Copy-Item -LiteralPath (Join-Path $repo 'public') -Destination $app -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $repo 'vendor\LibreHardwareMonitor') -Destination (Join-Path $app 'vendor') -Recurse -Force
@@ -56,10 +56,10 @@ foreach ($name in @('Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.Wi
     $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $app $name)
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') { throw 'WebView2 binary signature invalid.' }
 }
-& (Join-Path $PSScriptRoot 'create-icon.ps1') -Output (Join-Path $app 'PCMonitor.ico')
-& $launcherCompiler /nologo /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "/r:$(Join-Path $app 'Microsoft.Web.WebView2.Core.dll')" "/r:$(Join-Path $app 'Microsoft.Web.WebView2.WinForms.dll')" "/win32manifest:$(Join-Path $PSScriptRoot 'desktop.manifest')" "/win32icon:$(Join-Path $app 'PCMonitor.ico')" "/out:$(Join-Path $app 'PCMonitor.exe')" (Join-Path $PSScriptRoot 'PCMonitorLauncher.cs') (Join-Path $PSScriptRoot 'DesktopShell.cs')
-if ($LASTEXITCODE -ne 0) { throw 'PC Monitor launcher compilation failed.' }
-[IO.File]::WriteAllText((Join-Path $app 'PCMonitor.exe.config'), '<configuration><startup><supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.8" /></startup></configuration>')
+& (Join-Path $PSScriptRoot 'create-icon.ps1') -Output (Join-Path $app 'Rovarin.ico')
+& $launcherCompiler /nologo /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "/r:$(Join-Path $app 'Microsoft.Web.WebView2.Core.dll')" "/r:$(Join-Path $app 'Microsoft.Web.WebView2.WinForms.dll')" "/win32manifest:$(Join-Path $PSScriptRoot 'desktop.manifest')" "/win32icon:$(Join-Path $app 'Rovarin.ico')" "/out:$(Join-Path $app 'Rovarin.exe')" (Join-Path $PSScriptRoot 'RovarinLauncher.cs') (Join-Path $PSScriptRoot 'DesktopShell.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Rovarin launcher compilation failed.' }
+[IO.File]::WriteAllText((Join-Path $app 'Rovarin.exe.config'), '<configuration><startup><supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.8" /></startup></configuration>')
 [IO.File]::WriteAllText((Join-Path $app 'installation.json'), '{"schema":1,"channel":"windows-x64","data":"../data"}')
 Copy-Item -LiteralPath $node -Destination (Join-Path $runtime 'node.exe')
 Copy-Item -LiteralPath (Join-Path $cache 'Node-LICENSE') -Destination (Join-Path $runtime 'LICENSE')
@@ -80,7 +80,7 @@ The GPL-2 source edition is separate from the proprietary Official signed binary
 Only -install -silent is used. Never select developer/unrestricted/debug variants.
 2.2.0 is the current official production release, matches LHM's 2.2-era modules,
 supports 2.1 upgrades, and reports reboot-required CLI exit 3010.
-The untouched upstream installer internally contains edition choices; PC Monitor
+The untouched upstream installer internally contains edition choices; Rovarin
 never invokes those choices and does not extract/distribute unsigned drivers.
 '@
 [IO.File]::WriteAllText((Join-Path $app 'vendor\PawnIO\2.2.0\NOTICE.txt'), $pawnNotice)
@@ -98,13 +98,13 @@ if (-not (Test-Path -LiteralPath $compiler)) {
     if ($process.ExitCode -ne 0) { throw 'Inno Setup installation failed.' }
 }
 if ((Get-AuthenticodeSignature -LiteralPath $compiler).Status -ne 'Valid') { throw 'Compiler signature invalid.' }
-& $compiler (Join-Path $PSScriptRoot 'PCMonitor.iss')
+& $compiler (Join-Path $PSScriptRoot 'Rovarin.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
-$exe = Join-Path $repo 'dist\PCMonitorSetup.exe'
+$exe = Join-Path $repo 'dist\RovarinSetup.exe'
 $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-[IO.File]::WriteAllText((Join-Path $repo 'dist\PCMonitorSetup.sha256'), "$hash  PCMonitorSetup.exe`r`n")
+[IO.File]::WriteAllText((Join-Path $repo 'dist\RovarinSetup.sha256'), "$hash  RovarinSetup.exe`r`n")
 $buildInfo = @{version=(Get-Content -LiteralPath (Join-Path $repo 'package.json') -Raw | ConvertFrom-Json).version; builtAt=[DateTime]::UtcNow.ToString('o'); sha256=$hash; payloadManifestSha256=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'payload-manifest.json')).Hash.ToLowerInvariant(); inputs=@()}
-foreach ($relative in @('packaging/build.ps1','packaging/PCMonitor.iss','packaging/PCMonitorLauncher.cs','packaging/DesktopShell.cs','packaging/desktop.manifest','packaging/create-icon.ps1')) {
+foreach ($relative in @('packaging/build.ps1','packaging/Rovarin.iss','packaging/RovarinLauncher.cs','packaging/DesktopShell.cs','packaging/desktop.manifest','packaging/create-icon.ps1')) {
     $buildInfo.inputs += @{path=$relative;sha256=(Get-FileHash -LiteralPath (Join-Path $repo $relative)).Hash.ToLowerInvariant()}
 }
 [IO.File]::WriteAllText((Join-Path $repo 'dist\build.json'),($buildInfo | ConvertTo-Json -Depth 4))

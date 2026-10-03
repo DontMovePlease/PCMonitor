@@ -15,6 +15,13 @@
 .diagnostics-check h3 { font-size: 14px; }
 .diagnostics-check p { grid-column: 1 / -1; font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
 .diagnostics-check .diagnostics-value { font-family: var(--font-mono); color: var(--text-primary); }
+.diagnostics-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.diagnostics-actions:empty { display: none; }
+.diagnostics-actions button, .diagnostics-actions a { display: inline-flex; align-items: center; min-height: 36px; padding: 7px 11px; border: 1px solid var(--glass-rim); border-radius: 9px; background: rgba(56,189,248,.1); color: var(--text-primary); font: 600 12px var(--font-system); text-decoration: none; cursor: pointer; }
+.diagnostics-actions button:disabled { opacity: .5; cursor: default; }
+.diagnostics-actions button:focus-visible, .diagnostics-actions a:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+.diagnostics-actions p { flex-basis: 100%; line-height: 1.5; }
+@media (max-width: 699px) { .diagnostics-actions button, .diagnostics-actions a { min-height: 44px; } }
 .diagnostics-status { align-self: start; border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 650; }
 .diagnostics-status.supported { color: #6ee7b7; background: rgba(16, 185, 129, .15); }
 .diagnostics-status.unavailable { color: #cbd5e1; background: rgba(148, 163, 184, .15); }

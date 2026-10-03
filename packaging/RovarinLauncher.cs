@@ -1,9 +1,17 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
+
+[assembly: AssemblyTitle("Rovarin")]
+[assembly: AssemblyProduct("Rovarin")]
+[assembly: AssemblyDescription("Rovarin — Your PC in your pocket.")]
+[assembly: AssemblyCompany("Rovarin")]
+[assembly: AssemblyVersion("0.1.1.0")]
+[assembly: AssemblyFileVersion("0.1.1.0")]
 
 // Fixed Windows GUI entry point: no console, arbitrary commands or paths.
-internal static class PCMonitorLauncher
+internal static class RovarinLauncher
 {
     [STAThread]
     private static int Main(string[] args)

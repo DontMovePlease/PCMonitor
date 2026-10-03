@@ -18,7 +18,7 @@ Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
-public static class PCMonitorReparse {
+public static class RovarinReparse {
     [StructLayout(LayoutKind.Sequential)] public struct TagInfo { public uint attributes; public uint tag; }
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
     static extern SafeFileHandle CreateFile(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
@@ -41,7 +41,7 @@ function Assert-PlainPath([string]$target) {
     while ($cursor) {
         if (Test-Path -LiteralPath $cursor) {
             $item = Get-Item -LiteralPath $cursor -Force
-            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -and -not [PCMonitorReparse]::IsCloud($cursor)) { throw 'reparse-point' }
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -and -not [RovarinReparse]::IsCloud($cursor)) { throw 'reparse-point' }
         }
         $parent = Split-Path -Parent $cursor
         if ($parent -eq $cursor) { break }; $cursor = $parent
@@ -57,7 +57,7 @@ function Assert-Installation {
     if ([IO.Path]::GetFullPath($entry.InstallLocation.TrimEnd('\')) -ne $installRoot) { throw 'registration-mismatch' }
 }
 function Assert-Data {
-    # PC Monitor creates only leaf files here. Never traverse a user junction.
+    # Rovarin creates only leaf files here. Never traverse a user junction.
     if (Test-Path -LiteralPath $data) {
         foreach ($item in @(Get-ChildItem -LiteralPath $data -Force)) {
             if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'unsafe-data-entry' }
@@ -101,7 +101,7 @@ function Set-HandoffPhase($record,[string]$phase) {
         $bytes=[Text.Encoding]::UTF8.GetBytes(($record|ConvertTo-Json -Compress))
         $stream.Write($bytes,0,$bytes.Length);$stream.Flush()
     } finally { $stream.Dispose() }
-    try { if (-not [PCMonitorReparse]::MoveFileEx($temporary,$handoffFile,9)) { throw 'record-publication-failed' } }
+    try { if (-not [RovarinReparse]::MoveFileEx($temporary,$handoffFile,9)) { throw 'record-publication-failed' } }
     finally { if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Force} }
 }
 $trustedFiles = @('unins000.exe','unins000.dat','runtime\node.exe','app\server.js','app\scripts\installed-uninstall.ps1','app\scripts\stop.ps1','app\scripts\dashboard-runtime.ps1')
@@ -138,12 +138,12 @@ try {
         $record = @{schema=1;hashes=(Read-TrustedHashes)}
         [IO.File]::WriteAllText($trustFile,($record | ConvertTo-Json -Depth 4))
         if ($RemoveStartup) {
-            $shortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'PC Monitor.lnk'
+            $shortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'Rovarin.lnk'
             if (Test-Path -LiteralPath $shortcut) {
                 Assert-PlainPath $shortcut
                 $shell = New-Object -ComObject WScript.Shell
                 $link = $shell.CreateShortcut($shortcut)
-                if (($link.TargetPath -ieq (Join-Path $app 'PCMonitor.exe') -and $link.Arguments -ceq 'startup') -or
+                if (($link.TargetPath -ieq (Join-Path $app 'Rovarin.exe') -and $link.Arguments -ceq 'startup') -or
                     ($link.TargetPath -like '*\wscript.exe' -and $link.Arguments -ceq ('"' + (Join-Path $app 'startup.vbs') + '"'))) { Remove-Item -LiteralPath $shortcut }
                 [Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null
             }
@@ -167,7 +167,7 @@ try {
         $profile = Join-Path $installRoot 'desktop-profile'
         if (Test-Path -LiteralPath $profile) { Remove-Item -LiteralPath $profile -Recurse -Force }
         $settings = @('config.json','temperature-settings.json','onboarding-complete.json','desktop-window.json','desktop-trust.bin')
-        $operational = @('server.pid','server-state.json','server.instance.json','server-start.lock','server.log','server-error.log','launcher-error.log','enhanced-install.json','enhanced-install.lock','onboarding.lock','uninstall-result.json','uninstall-handoff.json')
+        $operational = @('server.pid','server-state.json','server.instance.json','server-start.lock','server.log','server-error.log','launcher-error.log','enhanced-install.json','enhanced-install.lock','onboarding.lock','uninstall-result.json','uninstall-handoff.json','rebrand-migration.json','rebrand-result.json')
         foreach ($item in @(Get-ChildItem -LiteralPath $data -Force -ErrorAction SilentlyContinue)) {
             $ownedFile = $item.Name -in $operational -or $item.Name -match '^server-start\.[a-f0-9]{32,64}\.(tmp|lock)$' -or $item.Name -match '^config\.json\.[a-f0-9]{24}\.tmp$' -or $item.Name -match '^temperature-settings\.json\.[0-9]+\.tmp$' -or $item.Name -match '^uninstall-handoff\.json\.[a-f0-9]{64}\.tmp$' -or $item.Name -match '^desktop-window\.json\.[a-f0-9]{32}\.tmp$'
             if ($ownedFile -or ($FullRemoval -and $item.Name -in $settings)) { Remove-Item -LiteralPath $item.FullName -Force }

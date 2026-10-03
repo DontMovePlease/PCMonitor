@@ -1,7 +1,7 @@
 {
-  "name": "pc-monitor-dashboard",
-  "version": "0.1.0",
-  "description": "Lightweight personal PC monitoring dashboard for Windows accessible via Tailscale",
+  "name": "rovarin-dashboard",
+  "version": "0.1.1",
+  "description": "Lightweight personal Rovarining dashboard for Windows accessible via Tailscale",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

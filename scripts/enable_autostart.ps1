@@ -11,7 +11,7 @@ $shortcut = $wsh.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = $wscriptPath
 $shortcut.Arguments = "`"$vbsPath`""
 $shortcut.WorkingDirectory = $projectDir
-$shortcut.Description = "PC Monitor Dashboard Background Service"
+$shortcut.Description = "Rovarin Dashboard Background Service"
 $shortcut.Save()
 
 if (Test-Path $shortcutPath) {

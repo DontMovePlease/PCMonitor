@@ -33,4 +33,6 @@ pet-output/
 packaging/cache/
 packaging/payload/
 packaging/payload-manifest.json
+packaging/test-install/
+packaging/test-install-legacy/
 desktop-trust.bin

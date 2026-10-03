@@ -258,7 +258,7 @@ async function testDiagnosticsUI() {
   assert.strictEqual(get('diagnosticsChecks').children.length, 2);
   assert.strictEqual(get('diagnosticsChecks').children[1].children[0].textContent, data.checks[1].label, 'values are rendered as text, never HTML');
   await get('copyDiagnostics').events.get('click')();
-  assert.match(copied, /PC Monitor compatibility report/);
+  assert.match(copied, /Rovarin compatibility report/);
   assert.match(copied, /GPU: supported · Test GPU/);
   assert.match(copied, /unavailable/);
   context.window.isSecureContext = false;
@@ -376,7 +376,7 @@ async function testCommandTimeouts() {
 }
 
 (async () => {
-  const missingBinary = path.join(root, '__pc_monitor_missing_nvidia_smi__.exe');
+  const missingBinary = path.join(root, '__rovarin_missing_nvidia_smi__.exe');
   assert(!fs.existsSync(missingBinary), 'the simulated missing binary path must not exist');
 
   await runCase({

@@ -31,7 +31,7 @@ async function testNativeIdentityHelper() {
 async function testHandleRaceFixture() {
   const os = require('os');
   const { execFile } = require('child_process');
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-monitor-handle-test-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rovarin-handle-test-'));
   try {
     const helper = fs.readFileSync(path.join(root, 'scripts/terminate-process.ps1'), 'utf8');
     let code = helper.match(/Add-Type -TypeDefinition @'\r?\n([\s\S]*?)\r?\n'@/)[1];
@@ -49,7 +49,7 @@ async function testHandleRaceFixture() {
     static bool CloseHandle(IntPtr h) { Closed++; return true; }
     public static string Run`);
     const file = path.join(directory, 'fixture.ps1');
-    fs.writeFileSync(file, `Add-Type -TypeDefinition @'\n${code}\n'@\n$r=[PCMonitorTermination]::Run(123,'node',100); if($r -ne 'terminated' -or [PCMonitorTermination]::Killed -ne 1 -or [PCMonitorTermination]::Closed -ne 1){throw 'Held object changed'}\n$r=[PCMonitorTermination]::Run(123,'node',100); if($r -ne 'stale-process' -or [PCMonitorTermination]::Killed -ne 1 -or [PCMonitorTermination]::Closed -ne 2){throw 'Reused PID was terminated'}\n'PASS held-handle PID mapping race fixture'`);
+    fs.writeFileSync(file, `Add-Type -TypeDefinition @'\n${code}\n'@\n$r=[RovarinTermination]::Run(123,'node',100); if($r -ne 'terminated' -or [RovarinTermination]::Killed -ne 1 -or [RovarinTermination]::Closed -ne 1){throw 'Held object changed'}\n$r=[RovarinTermination]::Run(123,'node',100); if($r -ne 'stale-process' -or [RovarinTermination]::Killed -ne 1 -or [RovarinTermination]::Closed -ne 2){throw 'Reused PID was terminated'}\n'PASS held-handle PID mapping race fixture'`);
     const output = await new Promise((resolve, reject) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', file], { windowsHide: true, timeout: 15000 }, (error, stdout, stderr) => error ? reject(new Error(stderr)) : resolve(stdout)));
     assert.match(output, /PASS held-handle/); console.log(output.trim());
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
@@ -331,7 +331,7 @@ async function testProcessKill() {
     assert.strictEqual((await request('/api/monitoring/status', { cookie })).status, 200, 'server must stay healthy after injection attempts');
     console.log('PASS strict kill input validation, content-type enforcement, and no command-execution path');
 
-    // ── PC Monitor self-protection ────────────────────────────────────────────
+    // ── Rovarin self-protection ────────────────────────────────────────────
     const protectionCases = [
       { payload: { pid: serverProcess.pid, name: 'node', startedAt: FAKE_STARTED_AT }, label: 'the active server' },
       { payload: { pid: process.pid, name: 'node', startedAt: FAKE_STARTED_AT }, label: 'its parent control process' },
@@ -345,7 +345,7 @@ async function testProcessKill() {
     }
     assert.strictEqual(serverProcess.exitCode, null, 'the server must still be running after self-protection refusals');
     assert.strictEqual((await request('/api/monitoring/status', { cookie })).status, 200, 'server must answer after self-protection refusals');
-    console.log('PASS PC Monitor self-protection and critical-process refusal');
+    console.log('PASS Rovarin self-protection and critical-process refusal');
 
     // ── Process identity / PID reuse ──────────────────────────────────────────
     const child1 = spawnDisposable();

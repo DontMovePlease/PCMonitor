@@ -11,7 +11,7 @@ const http = require('http');
 const { spawn, execFileSync } = require('child_process');
 
 async function testInterruptedStartup() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-monitor-guard-test-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rovarin-guard-test-'));
   const lifecycle = path.resolve(__dirname, '..', 'server-lifecycle.js');
   const children = [];
   async function interruptedClaim() {
@@ -101,7 +101,7 @@ async function testBinding() {
 
   // Real listener conflict, isolated runtime directory: never touches the
   // user's live server or its PID/port records.
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-monitor-port-test-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rovarin-port-test-'));
   const blocker = http.createServer((_req, res) => res.end('unrelated-test-listener'));
   const children = new Set();
   let active;

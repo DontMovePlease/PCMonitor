@@ -1,4 +1,4 @@
-' Windows VBScript to launch PC Monitor Dashboard in the background with no console window
+' Windows VBScript to launch Rovarin Dashboard in the background with no console window
 Set WshShell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)

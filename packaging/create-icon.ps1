@@ -1,4 +1,4 @@
-# Original vector-derived PC Monitor mark; no external image or licensing dependency.
+# Original vector-derived Rovarin mark; no external image or licensing dependency.
 param([Parameter(Mandatory=$true)][string]$Output)
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Drawing

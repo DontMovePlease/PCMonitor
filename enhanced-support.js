@@ -13,12 +13,12 @@ function isLocalDesktopRequest(req) {
 }
 function installationResult(code, failureCode) {
   const failures = {'package-invalid':'Enhanced installer signature, hash or version verification failed.', 'package-unavailable':'The trusted Enhanced installer is unavailable.', 'launch-failed':'The trusted Enhanced installer could not launch.'};
-  if (code === -1 && Object.hasOwn(failures,failureCode)) return {success:false,code:failureCode,error:failures[failureCode]+' PC Monitor remains usable.'};
+  if (code === -1 && Object.hasOwn(failures,failureCode)) return {success:false,code:failureCode,error:failures[failureCode]+' Rovarin remains usable.'};
   return code === 0 ? { success: true, code: 'installed', rebootRequired: false, message:'Enhanced hardware support installer completed. CPU sensor availability is checked separately.' }
     : [3010, 1641].includes(code) ? { success: true, code: 'reboot-required', rebootRequired: true, message:'Enhanced hardware support was installed. Restart Windows to finish setup.' }
     : code === 1460 ? { success: false, code: 'install-unconfirmed', error: 'Installation result is unconfirmed. Check Windows; restart Windows before retrying.' }
-    : [1223, 1602].includes(code) ? { success: false, code: 'cancelled', error: 'Installation was cancelled. PC Monitor remains usable.' }
-    : { success: false, code: 'install-failed', error: 'Enhanced support could not be installed. PC Monitor remains usable.' };
+    : [1223, 1602].includes(code) ? { success: false, code: 'cancelled', error: 'Installation was cancelled. Rovarin remains usable.' }
+    : { success: false, code: 'install-failed', error: 'Enhanced support could not be installed. Rovarin remains usable.' };
 }
 class EnhancedSupport {
   constructor({ root = __dirname, stateDirectory = root, execute = execFile } = {}) {
@@ -41,7 +41,7 @@ class EnhancedSupport {
       : driverInstalled && ['no-sensors','unsupported-cpu'].includes(observation?.code) ? 'Enhanced hardware support is installed, but no supported CPU temperature sensor was detected on this system.'
       : sensor === 'failed' ? (observation.note || 'The CPU temperature provider failed. Hardware support installation and sensor access are separate.')
       : driverInstalled ? 'Enhanced hardware support is installed. CPU sensor access is checked only with active monitoring; permissions may be required.'
-      : driverInstalled === false ? 'Enhanced hardware support is not installed. PC Monitor remains usable without CPU temperature.'
+      : driverInstalled === false ? 'Enhanced hardware support is not installed. Rovarin remains usable without CPU temperature.'
       : result?.message || 'Enhanced driver status has not been confirmed.';
     return { bundled: fs.existsSync(this.file), version: PAWNIO_VERSION, installing: !!this.inFlight || this.uncertain || result?.code === 'install-unconfirmed', result, driverInstalled, driverStatus:this.driver?.status || 'unavailable', sensor, note };
   }
@@ -66,12 +66,12 @@ class EnhancedSupport {
       try {
         const hash = crypto.createHash('sha256').update(await fs.promises.readFile(this.file)).digest('hex');
         if (hash !== PAWNIO_SHA256) return { success: false, code: 'package-invalid', error: 'Bundled Enhanced support failed verification.' };
-      } catch (_) { return { success: false, code: 'package-unavailable', error: 'Install Enhanced support using the PC Monitor Windows installer.' }; }
+      } catch (_) { return { success: false, code: 'package-unavailable', error: 'Install Enhanced support using the Rovarin Windows installer.' }; }
       return new Promise(resolve => {
         try { this.execute(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
           ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(this.root, 'scripts', 'install-enhanced.ps1')],
           { windowsHide: true, timeout: 300000, maxBuffer: 16384, encoding: 'utf8' }, (error, output) => {
-            if (error) { this.uncertain = !!error.killed; resolve(this.uncertain ? installationResult(1460) : { success:false,code:error.code==='ENOENT'?'tool-unavailable':'launch-failed',error:'The local Enhanced installation helper failed to launch or run. PC Monitor remains usable.' }); return; }
+            if (error) { this.uncertain = !!error.killed; resolve(this.uncertain ? installationResult(1460) : { success:false,code:error.code==='ENOENT'?'tool-unavailable':'launch-failed',error:'The local Enhanced installation helper failed to launch or run. Rovarin remains usable.' }); return; }
             try { const data = JSON.parse(output); this.uncertain = !Number.isInteger(data.exitCode); this.driverEpoch++; this.driver=null; this.driverCheckedAt=0; resolve(Number.isInteger(data.exitCode) ? installationResult(data.exitCode,data.failureCode) : installationResult(1460)); }
             catch (_) { this.uncertain = true; resolve({ success: false, code: 'install-unconfirmed', error: 'Installation result could not be confirmed.' }); }
           }); }

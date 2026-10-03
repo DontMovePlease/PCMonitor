@@ -4,11 +4,11 @@ title: "[Bug] "
 body:
   - type: markdown
     attributes:
-      value: "For security vulnerabilities, use [private reporting](https://github.com/DontMovePlease/PCMonitor/security/advisories/new). Never post PINs, cookies, credentials or unredacted personal information."
+      value: "For security vulnerabilities, use [private reporting](https://github.com/DontMovePlease/Rovarin/security/advisories/new). Never post PINs, cookies, credentials or unredacted personal information."
   - type: input
     id: version
     attributes:
-      label: PC Monitor version
+      label: Rovarin version
       placeholder: "0.1.0"
     validations:
       required: true

@@ -39,7 +39,7 @@
 .native-shell .native-app-bar {
   display: flex; align-items: center; gap: 10px;
   position: sticky; top: 0; z-index: 60; height: 36px;
-  margin: 0 -14px; padding: 0 56px 0 14px;
+  margin: 0 -14px; padding: 0 94px 0 14px;
   color: var(--text-primary); background: rgba(10, 16, 27, 0.94);
   border-bottom: 1px solid var(--border-card); backdrop-filter: blur(18px);
   app-region: drag; -webkit-app-region: drag; user-select: none;
@@ -1057,8 +1057,6 @@ body {
 body { --sidebar-width: 54px; --app-safe-top: env(safe-area-inset-top, 0px); --app-bar-height: 42px; padding-top: 0; }
 body.sidebar-expanded { --sidebar-width: 176px; }
 .native-app-bar { display: flex; position: sticky; top: 0; z-index: 50; height: var(--app-bar-height); flex-shrink: 0; gap: 8px; padding: 0 12px; background: #0c1420; align-items: center; }
-.native-app-bar .native-settings-button { margin-left: auto; position: static; min-width: 32px; min-height: 32px; }
-.native-app-bar .native-settings-button svg { width: 19px; height: 19px; }
 .native-app-bar button { app-region: no-drag; }
 .native-shell body { --app-bar-height: 36px; }
 .native-shell .native-app-bar { height: var(--app-bar-height); }
@@ -1067,7 +1065,7 @@ body.sidebar-expanded { --sidebar-width: 176px; }
 .app-sidebar.page-nav { position: fixed; left: 0; top: var(--app-bar-height); bottom: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; width: var(--sidebar-width); padding: 7px 5px; box-sizing: border-box; background: #0c1420; border-right: 1px solid #253044; border-radius: 0; gap: 6px; overflow-x: hidden; overflow-y: auto; transition: width .24s cubic-bezier(.22,1,.36,1); }
 .app-sidebar .page-nav-button, .native-shell .app-sidebar .page-nav-button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 44px; width: 100%; padding: 10px; overflow: hidden; white-space: nowrap; }
 .app-sidebar svg { width: 22px; height: 22px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; }
-.app-sidebar span { display: inline; opacity: 0; transform: translateX(-6px); transition: opacity .16s ease, transform .24s cubic-bezier(.22,1,.36,1); }
+.app-sidebar span { display: inline; opacity: 0; transform: translateX(-8px); transition: opacity .2s ease, transform .3s cubic-bezier(.22,1,.36,1); }
 .sidebar-expanded .app-sidebar span { opacity: 1; transform: translateX(0); }
 .sidebar-toggle svg { width: 20px; height: 20px; }
 .sidebar-backdrop { position: fixed; inset: var(--app-bar-height) 0 0; z-index: 35; background: #0009; border: 0; opacity: 0; visibility: hidden; pointer-events: none; touch-action: none; transition: opacity .24s ease, visibility 0s .24s; }
@@ -1096,3 +1094,18 @@ body.sidebar-expanded { --sidebar-width: 176px; }
   .processes-page { height: calc(100dvh - 64px - env(safe-area-inset-top)); }
 }
 @media (prefers-reduced-motion: reduce) { .app-sidebar.page-nav, .app-sidebar span, .sidebar-backdrop, .dashboard-container { transition: none !important; } }
+/* Reveal fixed-width rows without relaying out their contents on each frame. */
+@media (min-width: 700px) {
+  .app-sidebar .page-nav-button, .native-shell .app-sidebar .page-nav-button { width: 166px; flex-shrink: 0; }
+}
+.app-sidebar #nativeSettingsButton { margin-top: auto; min-height: 44px; }
+.app-sidebar.page-nav, .dashboard-container, .native-shell .dashboard-container { transition-duration: .3s; }
+.sidebar-backdrop { transition: opacity .3s ease, visibility 0s .3s; }
+@media (max-width: 699px) {
+  .app-sidebar.page-nav { transition: transform .3s cubic-bezier(.22,1,.36,1), visibility 0s .3s; }
+  .sidebar-expanded .app-sidebar { transition-delay: 0s; }
+  .app-sidebar #nativeSettingsButton { width: 100%; }
+}
+.native-shell .login-container { padding: 22px; min-height: calc(100dvh - 36px); }
+.native-shell body:has(.login-container) { padding: 0; }
+.native-shell body:has(.login-container) .native-app-bar { margin: 0; }

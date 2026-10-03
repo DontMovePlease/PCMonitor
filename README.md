@@ -1,26 +1,26 @@
 <div align="center">
 
-<img src="docs/images/icon.png" width="64" height="64" alt="PC Monitor icon">
+<img src="docs/images/icon.png" width="64" height="64" alt="Rovarin icon">
 
-# PC Monitor
+# Rovarin
 
-**Your Windows PC, at a glance. On your desktop and your other devices.**
+**Your PC in your pocket.**
 
 ![Windows 11 x64](https://img.shields.io/badge/Windows_11-x64-267099)
 ![Experimental alpha](https://img.shields.io/badge/status-experimental_alpha-d99b36)
 ![Source available](https://img.shields.io/badge/license-PolyForm_Noncommercial-617184)
 
-[**Download v0.1.0 for Windows**](https://github.com/DontMovePlease/PCMonitor/releases/download/v0.1.0/PCMonitorSetup.exe) · [Release notes](https://github.com/DontMovePlease/PCMonitor/releases/tag/v0.1.0) · [Report a bug](https://github.com/DontMovePlease/PCMonitor/issues/new/choose)
+[**Download for Windows**](https://github.com/DontMovePlease/Rovarin/releases/download/v0.1.1/RovarinSetup.exe) · [Release notes](https://github.com/DontMovePlease/Rovarin/releases) · [Report a bug](https://github.com/DontMovePlease/Rovarin/issues/new/choose)
 
 </div>
 
-PC Monitor is a standalone Windows monitoring application with a compact dashboard, focused graphs, process monitoring, maintenance tools, and a compatibility report. Connect another device through Tailscale to view the same PC remotely.
+Rovarin is a standalone Windows monitoring application with a compact dashboard, focused graphs, process monitoring, maintenance tools, and a compatibility report. Connect another device through Tailscale to view the same PC remotely.
 
 **Experimental alpha:** useful for testing and code review, with compatibility and clean-machine validation still in progress. The installer is unsigned. This is not a production-ready release.
 
-![PC Monitor desktop Overview](docs/images/overview.png)
+![Rovarin desktop Overview](docs/images/overview.png)
 
-<sub>Desktop Overview capture. Readings show total PC usage, not PC Monitor's own resource usage; hardware and load vary by machine.</sub>
+<sub>Desktop Overview capture. Readings show total PC usage, not Rovarin's own resource usage; hardware and load vary by machine.</sub>
 
 ## What it does
 
@@ -45,13 +45,22 @@ One Node backend. One vanilla HTML/CSS/JS frontend. The native desktop renders t
 
 **Requirements:** Windows 11 x64, a standard Windows user account, and Microsoft's WebView2 Runtime. The Node.js runtime is bundled; no separate Node/npm installation is needed. If WebView2 is missing, the app links to Microsoft's official runtime installer.
 
-1. Download **PCMonitorSetup.exe** from the [v0.1.0 release](https://github.com/DontMovePlease/PCMonitor/releases/tag/v0.1.0). Do not use GitHub's source ZIP as the installer.
-2. Run it under the Windows account that will use PC Monitor. The unsigned installer may trigger SmartScreen; inspect the source/release and checksum before deciding whether to run it. No signing or reputation guarantee is claimed.
-3. Choose whether to start PC Monitor with Windows. This is enabled by default and runs the backend quietly at sign-in, without a Windows service or scheduled task.
-4. Optional **Enhanced CPU Temperature** installs the signed PawnIO driver through Windows UAC. You may skip it; PC Monitor remains usable without CPU temperature.
-5. Leave **Launch PC Monitor** checked. Setup displays your newly generated PIN. Keep it private, then choose **Finish / Open PC Monitor** and sign in.
+1. Download **RovarinSetup.exe** under **Assets** on the [newest published release](https://github.com/DontMovePlease/Rovarin/releases). Do not use GitHub's source ZIP as the installer.
+2. Run it under the Windows account that will use Rovarin. The unsigned installer may trigger SmartScreen; inspect the source/release and checksum before deciding whether to run it. No signing or reputation guarantee is claimed.
+3. Choose whether to start Rovarin with Windows. This is enabled by default and runs the backend quietly at sign-in, without a Windows service or scheduled task.
+4. Optional **Enhanced CPU Temperature** installs the signed PawnIO driver through Windows UAC. You may skip it; Rovarin remains usable without CPU temperature.
+5. Leave **Launch Rovarin** checked. Setup displays your newly generated PIN. Keep it private, then choose **Finish / Open Rovarin** and sign in.
 
-Normal Desktop and Start Menu shortcuts are named **PC Monitor** and open PCMonitor.exe. You do not need the repository's developer .bat files.
+Normal Desktop and Start Menu shortcuts are named **Rovarin** and open Rovarin.exe. You do not need the repository's developer .bat files.
+
+### Upgrading an earlier installation
+
+Run the Rovarin installer normally. It recognizes the legacy PC Monitor installation,
+preserves your PIN, security preferences, desktop trust and temperature settings,
+and moves them to `%LOCALAPPDATA%\Rovarin\data`. Its existing trusted uninstaller
+removes the old application; legacy settings are removed only after the new server
+and copied settings are verified. Unknown user files are retained. Do not manually
+delete your previous configuration or install a second copy to change the name.
 
 ### Connect your phone or another device
 
@@ -59,12 +68,12 @@ Local desktop use works **without Tailscale**. Tailscale is required for secure 
 
 1. Install [Tailscale on this PC](https://tailscale.com/download/windows) and on the other device.
 2. Sign both devices into the same Tailscale network.
-3. In PC Monitor Setup, select **Re-check Tailscale**. Once connected, copy the device address or scan its QR code.
-4. Open that address in the other device's browser and enter your PC Monitor PIN.
+3. In Rovarin Setup, select **Re-check Tailscale**. Once connected, copy the device address or scan its QR code.
+4. Open that address in the other device's browser and enter your Rovarin PIN.
 
-The address uses your PC’s detected Tailscale IPv4 address and active PC Monitor port. PC Monitor prefers port 7331 and automatically falls back to 7332–7335 if needed. The PIN is never included in the URL. On supported mobile browsers, you can add PC Monitor to your Home Screen for quick app-like access.
+The address uses your PC’s detected Tailscale IPv4 address and active Rovarin port. Rovarin prefers port 7331 and automatically falls back to 7332–7335 if needed. The PIN is never included in the URL. On supported mobile browsers, you can add Rovarin to your Home Screen for quick app-like access.
 
-If Tailscale is missing or disconnected, Setup explains the next step. You can finish and use PC Monitor locally first. Do not forward this HTTP port through a router or expose it publicly.
+If Tailscale is missing or disconnected, Setup explains the next step. You can finish and use Rovarin locally first. Do not forward this HTTP port through a router or expose it publicly.
 
 ## PIN, desktop behavior and recovery
 
@@ -72,7 +81,7 @@ If Tailscale is missing or disconnected, Setup explains the next step. You can f
 - Valid sessions last up to 90 days, so normal use does not require daily login. Sessions are in memory; a backend restart requires sign-in again.
 - **Settings → Security → Lock** revokes access. Local native Settings also provides **Generate New PIN**, which signs out all devices.
 - PIN prompts on the native desktop are on by default. You may explicitly disable them for this Windows account; other devices still require the PIN. Native sign-in uses Windows-protected trust and ordinary revocable sessions, not unauthenticated APIs.
-- Forgotten PIN? Open **PC Monitor Setup and PIN Recovery** from the Start Menu. Recovery is local only; there is no remote PIN recovery endpoint.
+- Forgotten PIN? Open **Rovarin Setup and PIN Recovery** from the Start Menu. Recovery is local only; there is no remote PIN recovery endpoint.
 - Alt+F4/system close hides to the tray. **Exit Desktop App** or the native top-right X closes only the shell. The backend remains available remotely. Minimized/hidden clients stop requesting dashboard telemetry.
 
 ## Optional temperatures and compatibility
@@ -85,7 +94,7 @@ CPU temperature has three modes in Diagnostics:
 - **System Thermal Zone — Advanced / Experimental:** a firmware zone, **not CPU package temperature**. It is never substituted automatically and does not trigger CPU temperature alerts.
 - **Off:** disables CPU temperature collection.
 
-Missing optional tools or sensors do not make PC Monitor unhealthy. Temperature labels are informational thresholds, not a guarantee against throttling or hardware damage.
+Missing optional tools or sensors do not make Rovarin unhealthy. Temperature labels are informational thresholds, not a guarantee against throttling or hardware damage.
 
 ## Safety and privacy
 
@@ -93,17 +102,17 @@ PIN/session authorization protects the APIs, SSE, monitoring leases, maintenance
 
 Authenticated users can run maintenance and end a selected process. End Task verifies **PID + name + start time** and terminates the same held Windows process handle. It does not terminate a whole process tree or prevent an application from respawning. Some maintenance actions require elevation or change Windows state; read their confirmation first. Run normally as a standard user.
 
-Tailscale reachability is not authentication. PC Monitor currently serves HTTP; Tailscale encrypts remote device-to-device traffic, but local HTTP is not TLS. Restrict your tailnet to trusted devices. The source filter accepts address ranges; it does not cryptographically establish the receiving interface. PIN protection does not defend against compromise of the Windows account that owns the configuration.
+Tailscale reachability is not authentication. Rovarin currently serves HTTP; Tailscale encrypts remote device-to-device traffic, but local HTTP is not TLS. Restrict your tailnet to trusted devices. The source filter accepts address ranges; it does not cryptographically establish the receiving interface. PIN protection does not defend against compromise of the Windows account that owns the configuration.
 
-**Security findings:** use [private vulnerability reporting](https://github.com/DontMovePlease/PCMonitor/security/advisories/new), not a public issue containing exploit details. Include the affected version, impact and a minimal reproduction without credentials. Security review covers this experimental candidate; there is no guaranteed response time or established older-version support.
+**Security findings:** use [private vulnerability reporting](https://github.com/DontMovePlease/Rovarin/security/advisories/new), not a public issue containing exploit details. Include the affected version, impact and a minimal reproduction without credentials. Security review covers this experimental candidate; there is no guaranteed response time or established older-version support.
 
 The installer contains application/runtime files and required third-party assets/licenses. It does **not** contain a developer PIN, local configuration, credentials, private Tailscale address, logs, runtime state or AGENTS.md. Each fresh installation generates its own configuration and PIN.
 
 ## Upgrade or uninstall
 
-Run a newer installer over the existing installation to preserve your PIN and preferences. Use **Windows Settings → Apps → Installed apps → PC Monitor → Uninstall** for normal removal.
+Run a newer installer over the existing installation to preserve your PIN and preferences. Use **Windows Settings → Apps → Installed apps → Rovarin → Uninstall** for normal removal.
 
-Uninstall preserves settings by default. Explicit **Full removal** also removes PC Monitor's PIN/configuration and preferences, so reinstall generates a new PIN. Shared PawnIO and Tailscale are not removed. Installed copies also offer an authenticated, PIN-confirmed uninstall in Diagnostics; source checkouts cannot use it.
+Uninstall preserves settings by default. Explicit **Full removal** also removes Rovarin's PIN/configuration and preferences, so reinstall generates a new PIN. Shared PawnIO and Tailscale are not removed. Installed copies also offer an authenticated, PIN-confirmed uninstall in Diagnostics; source checkouts cannot use it.
 
 ## Testing status and feedback
 
@@ -111,7 +120,7 @@ Release verification requires eight regression suites plus isolated real Windows
 
 Still outstanding: broader clean Windows Home/Pro and standard/admin coverage, physical mobile interaction/connectivity, actual Windows sign-in startup, optional driver/UAC/reboot outcomes, and sensor compatibility across more hardware. Short local process measurements do not establish aggregate or long-duration resource costs.
 
-Please [report reproducible bugs](https://github.com/DontMovePlease/PCMonitor/issues/new/choose) with your Windows version, PC Monitor version, steps and a reviewed **Diagnostics → Copy report**. Remove private addresses and other personal details. Never post PINs, cookies or credentials. Share security vulnerabilities through [private reporting](https://github.com/DontMovePlease/PCMonitor/security/advisories/new).
+Please [report reproducible bugs](https://github.com/DontMovePlease/Rovarin/issues/new/choose) with your Windows version, Rovarin version, steps and a reviewed **Diagnostics → Copy report**. Remove private addresses and other personal details. Never post PINs, cookies or credentials. Share security vulnerabilities through [private reporting](https://github.com/DontMovePlease/Rovarin/security/advisories/new).
 
 ## Inspect, build or modify
 
@@ -128,7 +137,7 @@ On Windows with a supported Node LTS installed, run `npm run dev` from the sourc
 | `public/` | Canonical desktop/mobile frontend |
 | `packaging/DesktopShell.cs` | Thin native WebView2 shell |
 | `scripts/*-smoke-test.js` | Plain Node regression suites and isolated fixtures |
-| `packaging/PCMonitor.iss` | Per-user Inno installation/uninstall |
+| `packaging/Rovarin.iss` | Per-user Inno installation/uninstall |
 
 Keep changes focused. Preserve adaptive monitoring, authentication, process identity/handle checks, lifecycle ownership and zero npm runtime dependencies. Never add independent telemetry loops or client-supplied commands. Discuss significant changes in an issue first; submit only code you have permission to contribute under the current terms and retain third-party notices. Contributions do not transfer copyright.
 
@@ -153,6 +162,6 @@ Packaging tests require generated assets and working Windows ownership queries. 
 
 ## License
 
-PC Monitor-owned code is licensed under [**PolyForm Noncommercial 1.0.0**](LICENSE). Inspection and personal/noncommercial modifications are permitted; commercial use requires separate permission from the relevant copyright holders. This is **source-available, not OSI open source**.
+Rovarin-owned code is licensed under [**PolyForm Noncommercial 1.0.0**](LICENSE). Inspection and personal/noncommercial modifications are permitted; commercial use requires separate permission from the relevant copyright holders. This is **source-available, not OSI open source**.
 
 Third-party components retain their own licenses/notices. Earlier copies shared under MIT retain those permissions; this change does not revoke earlier grants. Ownership/permission for any outside contributions must be reviewed before relicensing them.

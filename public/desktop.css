@@ -1,4 +1,4 @@
-/* ── PC Monitor — desktop layout ─────────────────────────────────────────────
+/* ── Rovarin — desktop layout ─────────────────────────────────────────────
    Loaded only by index.html and scoped entirely to desktop viewports, so the
    phone UI is unaffected. Presentation only: the same DOM, app.js, SSE stream,
    monitoring leases, authentication, and adaptive sampling are reused as-is. */

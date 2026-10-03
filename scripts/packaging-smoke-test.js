@@ -39,7 +39,7 @@ function decodePhoneQr(qr) {
 // registering startup, or touching the user's running development server.
 async function testPackagedRuntime() {
   if (process.platform !== 'win32') return;
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-monitor-release-qa-'));
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'rovarin-release-qa-'));
   const app = path.join(temp, 'app');
   fs.cpSync(payload, temp, { recursive: true });
   const foreignOwner = path.join(temp,'data/server.instance.json');
@@ -186,7 +186,7 @@ async function testPackagedRuntime() {
     const quote = value => value.replace(/'/g, "''");
     const shortcut = path.join(temp, 'qa-startup.lnk');
     execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      `$shell=New-Object -ComObject WScript.Shell; $link=$shell.CreateShortcut('${quote(shortcut)}'); $link.TargetPath='${quote(path.join(app, 'PCMonitor.exe'))}'; $link.Arguments='startup'; $link.WorkingDirectory='${quote(app)}'; $link.Save(); Start-Process -FilePath '${quote(shortcut)}' -WindowStyle Hidden`],
+      `$shell=New-Object -ComObject WScript.Shell; $link=$shell.CreateShortcut('${quote(shortcut)}'); $link.TargetPath='${quote(path.join(app, 'Rovarin.exe'))}'; $link.Arguments='startup'; $link.WorkingDirectory='${quote(app)}'; $link.Save(); Start-Process -FilePath '${quote(shortcut)}' -WindowStyle Hidden`],
     { windowsHide: true, timeout: 5000, stdio: 'pipe' });
     // stop.ps1 independently verifies the exact bundled executable/script.
     startupOwned = true;
@@ -206,7 +206,7 @@ async function testPackagedRuntime() {
     const report = await get('/api/diagnostics', cookie);
     assert.strictEqual(report.binding.actualPort, state.actualPort); assert.strictEqual(report.binding.preferredPort, 7331);
     assert.strictEqual(report.binding.fallbackRequired, true);
-    execFileSync(path.join(app, 'PCMonitor.exe'), ['startup'], { windowsHide: true, timeout: 10000 });
+    execFileSync(path.join(app, 'Rovarin.exe'), ['startup'], { windowsHide: true, timeout: 10000 });
     await pause(4000);
     assert.strictEqual(JSON.parse(fs.readFileSync(path.join(temp, 'data/server-state.json'))).pid, state.pid, 'repeat sign-in launcher reuses owner');
     const setup = JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(app, 'scripts/setup.ps1'), '-CheckOnly'], { windowsHide: true, timeout: 25000, encoding: 'utf8' }));
@@ -233,10 +233,18 @@ async function testPackagedRuntime() {
   }
 }
 async function main() {
+  await require('./release-manager-smoke-test')(root);
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packaging', 'payload-manifest.json')));
   for (const file of manifest.files) assert.strictEqual(hash(path.join(payload, file.path)), file.sha256, file.path);
   const files = manifest.files.map(file => file.path);
-  for (const file of ['runtime/node.exe', 'runtime/LICENSE', 'app/installation.json', 'app/scripts/setup.ps1', 'app/scripts/install-enhanced.ps1', 'app/desktop.vbs', 'app/startup.vbs', 'app/startup-disable.vbs']) assert(files.includes(file));
+  // Current product text must be Rovarin. Opaque protocols and the dedicated
+  // legacy migration helper are intentional compatibility, not visible branding.
+  for(const file of files.filter(file=>/\.(?:js|ps1|vbs|html|css|json|md|txt)$/.test(file))) {
+    if(file==='app/scripts/rebrand-migration.ps1')continue;
+    const text=fs.readFileSync(path.join(payload,file),'utf8').replace(/PC_MONITOR[A-Z_]*|pc_monitor_session|PCMonitor\.NativeDesktop\.v1|x-pc-monitor-(?:desktop|ui-revision)|uninstall-pc-monitor|pc-monitor-(?:ui-revision|sidebar-expanded|stream-state|processes|pagechange|desktop-visibility|uninstalling)|pcMonitorUninstalling/gi,'');
+    assert(!/pc[ _-]?monitor/i.test(text),'Unintended legacy branding in '+file);
+  }
+  for (const file of ['runtime/node.exe', 'runtime/LICENSE', 'app/installation.json', 'app/scripts/setup.ps1', 'app/scripts/install-enhanced.ps1', 'app/scripts/rebrand-migration.ps1', 'app/desktop.vbs', 'app/startup.vbs', 'app/startup-disable.vbs']) assert(files.includes(file));
   for (const asset of ASSETS) assert(files.includes('app/vendor/LibreHardwareMonitor/0.9.6/' + asset));
   for (const file of ['LICENSE', 'THIRD-PARTY-NOTICES.txt', 'licenses/PawnIO.Modules.txt', 'source/LibreHardwareMonitor.zip']) assert(files.includes('app/vendor/LibreHardwareMonitor/0.9.6/' + file));
   assert(!files.some(file => /(?:config\.json|temperature-settings|server\.pid|server-state|server\.instance|\.log$|node_modules|smoke-test|pet-output|AGENTS\.md|PROJECT_STATUS\.md|THE-PLAN\.md)/.test(file)));
@@ -258,32 +266,40 @@ async function main() {
   assert(helper.includes('[IO.FileShare]::Read')); assert(helper.includes('240000'));
   const terms = fs.readFileSync(path.join(payload, 'app/vendor/PawnIO/2.2.0/NOTICE.txt'), 'utf8');
   assert(terms.includes('redistributed unmodified')); assert(terms.includes('proprietary'));
-  const iss = fs.readFileSync(path.join(root, 'packaging/PCMonitor.iss'), 'utf8');
+  const iss = fs.readFileSync(path.join(root, 'packaging/Rovarin.iss'), 'utf8');
   assert(iss.includes('PrivilegesRequired=lowest')); assert(iss.includes('PrepareToInstall')); assert(iss.includes('InitializeUninstall'));
-  assert(iss.includes('{userstartup}\\PC Monitor')); assert(!iss.includes('[Registry]'));
+  assert(iss.includes('{userstartup}\\Rovarin')); assert(!iss.includes('[Registry]'));
   assert.match(iss, /Name: "startup";[^\r\n]*Flags: checkedonce/);
   assert.match(iss, /Name: "desktopPin";[^\r\n]*Flags: checkedonce; Check: FreshDesktopPreference/);
   assert(iss.includes('if not ExistingConfiguration then begin') && iss.includes('Passwordless desktop requires interactive confirmation.'));
   assert(files.includes('app/scripts/native-trust.ps1'), 'native-only DPAPI helper must ship');
   assert(!files.some(file => /desktop-trust\.bin$/.test(file)), 'no recipient credential in payload');
   assert(!iss.includes('Tasks: desktopicon'), 'desktop shortcut is unconditional');
-  assert.strictEqual((iss.match(/Name: "\{autodesktop\}\\PC Monitor"/g) || []).length, 1);
-  assert.strictEqual((iss.match(/Name: "\{group\}\\PC Monitor";/g) || []).length, 1);
-  assert.match(iss, /Description: "Launch PC Monitor"; Flags: postinstall nowait skipifsilent/);
-  for (const directive of ['Uninstallable=yes','CreateUninstallRegKey=yes','UninstallDisplayName=PC Monitor','FinishedHeadingLabel=PC Monitor installed successfully']) assert(iss.includes(directive));
+  assert.strictEqual((iss.match(/Name: "\{autodesktop\}\\Rovarin"/g) || []).length, 1);
+  assert.strictEqual((iss.match(/Name: "\{group\}\\Rovarin";/g) || []).length, 1);
+  assert.match(iss, /Description: "Launch Rovarin"; Flags: postinstall nowait skipifsilent/);
+  for (const directive of ['Uninstallable=yes','CreateUninstallRegKey=yes','UninstallDisplayName=Rovarin','FinishedHeadingLabel=Rovarin installed successfully']) assert(iss.includes(directive));
   assert(!iss.includes('Filename: "{sys}\\wscript.exe"'), 'normal shortcuts must target the application');
-  assert(iss.includes('Filename: "{app}\\app\\PCMonitor.exe"; WorkingDir: "{app}\\app"'));
-  const launcher = path.join(payload,'app/PCMonitor.exe');
+  assert(iss.includes('Filename: "{app}\\app\\Rovarin.exe"; WorkingDir: "{app}\\app"'));
+  const launcher = path.join(payload,'app/Rovarin.exe');
+  const nativeMetadata=JSON.parse(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`$v=[Diagnostics.FileVersionInfo]::GetVersionInfo('${launcher.replace(/'/g,"''")}'); @{product=$v.ProductName;description=$v.FileDescription;version=$v.FileVersion}|ConvertTo-Json -Compress`],{encoding:'utf8',windowsHide:true,timeout:10000}));
+  assert.strictEqual(nativeMetadata.product,'Rovarin');
+  assert.strictEqual(nativeMetadata.description,'Rovarin');
+  assert.strictEqual(nativeMetadata.version,JSON.parse(fs.readFileSync(path.join(root,'package.json'))).version+'.0');
+  assert(iss.includes('DefaultDirName={localappdata}\\Rovarin') && iss.includes('UsePreviousAppDir=no') && iss.includes("RebrandMigration('Prepare')") && iss.includes("RebrandMigration('Commit')"));
+  assert(!files.some(file=>/PCMonitor(?:Setup)?\.(?:exe|ico)/i.test(file)), 'current payload has no legacy executables/icons');
+  const migration=fs.readFileSync(path.join(root,'scripts/rebrand-migration.ps1'),'utf8');
+  for(const protection of ['legacy-hash-mismatch','conflicting-canonical-settings','replacement-setting-mismatch','legacy-setting-changed','redirecting-path','WaitForExit(60000)']) assert(migration.includes(protection));
   assert(fs.existsSync(launcher));
   const nativeBinary=fs.readFileSync(launcher);
   assert.strictEqual(nativeBinary.readUInt16LE(nativeBinary.readUInt32LE(0x3c)+24+68),2,'native desktop must use Windows GUI subsystem, no console');
-  for(const name of ['PCMonitor.ico','PCMonitor.exe.config','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll','WebView2-LICENSE.txt','scripts/desktop-host.ps1']) assert(files.includes('app/'+name),'native payload missing '+name);
+  for(const name of ['Rovarin.ico','Rovarin.exe.config','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll','WebView2-LICENSE.txt','scripts/desktop-host.ps1']) assert(files.includes('app/'+name),'native payload missing '+name);
   const shellSource=fs.readFileSync(path.join(root,'packaging/DesktopShell.cs'),'utf8');
   assert(shellSource.includes('AreHostObjectsAllowed = false') && shellSource.includes('IsDashboardUri(e.Source, origin)'));
   assert(shellSource.includes('EventWaitHandleSecurity') && shellSource.includes('MutexSecurity') && shellSource.includes('WindowsIdentity.GetCurrent().User'));
   assert(iss.includes("'close-desktop'"));
-  assert(!/Name: "\{group\}\\PC Monitor Web Dashboard";/.test(iss), 'no end-user desktop browser shortcut');
-  assert(iss.includes('Type: files; Name: "{group}\\PC Monitor Web Dashboard.lnk"'), 'upgrade retires the old owned browser shortcut');
+  assert(!/Name: "\{group\}\\Rovarin Web Dashboard";/.test(iss), 'no end-user desktop browser shortcut');
+  assert(iss.includes('Type: files; Name: "{group}\\Rovarin Web Dashboard.lnk"'), 'upgrade retires the old owned browser shortcut');
   assert(!shellSource.includes('OpenWeb') && !shellSource.includes('Open web dashboard') && !shellSource.includes('Open Web Dashboard'));
   assert(shellSource.includes('Copy Mobile Address') && shellSource.includes('Your clipboard was not changed.'));
   assert(!fs.readFileSync(path.join(root,'scripts/desktop.ps1'),'utf8').includes('--app='), 'retired Edge app launch');
@@ -366,7 +382,7 @@ async function main() {
     $ast=[Management.Automation.Language.Parser]::ParseInput($source,[ref]$tokens,[ref]$errors);if($errors.Count){throw 'Enhanced helper syntax'}
     $fn=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-EnhancedInstallMessage'},$true)
     Invoke-Expression $fn.Extent.Text
-    foreach($code in @(0,3010,1641,1223,1602,1460,5)){ $message=Get-EnhancedInstallMessage @{exitCode=$code;failureCode='install-failed'};if(-not $message.Contains('PC Monitor')){throw 'Missing core usability status'};if($code -in @(3010,1641) -and -not $message.Contains('Restart Windows')){throw 'Reboot message'};if($code -eq 0 -and -not $message.Contains('checked separately')){throw 'Sensor status conflated'};if($code -eq 5 -and -not $message.Contains('exit 5')){throw 'Failure exit missing'} }
+    foreach($code in @(0,3010,1641,1223,1602,1460,5)){ $message=Get-EnhancedInstallMessage @{exitCode=$code;failureCode='install-failed'};if(-not $message.Contains('Rovarin')){throw 'Missing core usability status'};if($code -in @(3010,1641) -and -not $message.Contains('Restart Windows')){throw 'Reboot message'};if($code -eq 0 -and -not $message.Contains('checked separately')){throw 'Sensor status conflated'};if($code -eq 5 -and -not $message.Contains('exit 5')){throw 'Failure exit missing'} }
     foreach($stage in @('package-invalid','package-unavailable','launch-failed')){if((Get-EnhancedInstallMessage @{exitCode=-1;failureCode=$stage}).Contains('not returned')){throw 'Validation/launch must not look like timeout'}}
     Add-Type -AssemblyName System.Drawing
     $source=[IO.File]::ReadAllText('${path.join(root,'scripts/setup.ps1').replace(/'/g,"''")}')
@@ -384,7 +400,7 @@ async function main() {
   for (const address of ['127.0.0.1','::ffff:127.0.0.1','::1']) assert(isLocalDesktopRequest(request(address)));
   for (const address of ['100.64.0.2','::ffff:100.64.0.2','192.168.0.1','fd7a:115c:a1e0::1']) assert(!isLocalDesktopRequest(request(address)));
   assert(!isLocalDesktopRequest(request('127.0.0.1','100.64.0.2:7331'))); assert(!isLocalDesktopRequest(request('127.0.0.1','attacker.invalid')));
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-monitor-packaging-'));
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'rovarin-packaging-'));
   let child;
   try {
     const { EventEmitter } = require('events');
@@ -427,13 +443,13 @@ async function main() {
     await element('uninstallForm').listeners.submit({preventDefault(){}});assert.strictEqual(posts,1);
     console.log('PASS uninstall UI final confirmation, installed-only visibility, body-only PIN clearing and accepted/no-retry state (DOM fixture)');
     const releaseRoot=path.join(temp,'release'); fs.mkdirSync(path.join(releaseRoot,'dist'),{recursive:true});fs.mkdirSync(path.join(releaseRoot,'packaging'));
-    fs.writeFileSync(path.join(releaseRoot,'dist/PCMonitorSetup.exe'),'test fixture only');fs.writeFileSync(path.join(releaseRoot,'packaging/payload-manifest.json'),'{"files":[]}');fs.writeFileSync(path.join(releaseRoot,'package.json'),'{"version":"1.0.0"}');
-    fs.writeFileSync(path.join(releaseRoot,'dist/build.json'),JSON.stringify({sha256:hash(path.join(releaseRoot,'dist/PCMonitorSetup.exe')),payloadManifestSha256:hash(path.join(releaseRoot,'packaging/payload-manifest.json')),inputs:[]}));
+    fs.writeFileSync(path.join(releaseRoot,'dist/RovarinSetup.exe'),'test fixture only');fs.writeFileSync(path.join(releaseRoot,'packaging/payload-manifest.json'),'{"files":[]}');fs.writeFileSync(path.join(releaseRoot,'package.json'),'{"version":"1.0.0"}');
+    fs.writeFileSync(path.join(releaseRoot,'dist/build.json'),JSON.stringify({sha256:hash(path.join(releaseRoot,'dist/RovarinSetup.exe')),payloadManifestSha256:hash(path.join(releaseRoot,'packaging/payload-manifest.json')),inputs:[]}));
     await assert.rejects(verifyAndPublish(releaseRoot,async()=>{throw new Error('mock regression failed');}),/mock regression failed/);assert(!fs.existsSync(path.join(releaseRoot,'publish')));
-    let calls=0;const published=await verifyAndPublish(releaseRoot,async()=>{calls++;});assert.strictEqual(calls,9);assert.strictEqual(published,hash(path.join(releaseRoot,'publish/PCMonitorSetup.exe')));
-    const prior=fs.readFileSync(path.join(releaseRoot,'publish/PCMonitorSetup.exe'));
-    await assert.rejects(verifyAndPublish(releaseRoot,async()=>{throw new Error('mock installer failed');}),/mock installer failed/);assert(fs.readFileSync(path.join(releaseRoot,'publish/PCMonitorSetup.exe')).equals(prior));
-    await assert.rejects(verifyAndPublish(releaseRoot,async()=>{fs.writeFileSync(path.join(releaseRoot,'dist/PCMonitorSetup.exe'),'changed during verification');}),/Build changed/);assert(fs.readFileSync(path.join(releaseRoot,'publish/PCMonitorSetup.exe')).equals(prior));
+    let calls=0;const published=await verifyAndPublish(releaseRoot,async()=>{calls++;});assert.strictEqual(calls,9);assert.strictEqual(published,hash(path.join(releaseRoot,'publish/RovarinSetup.exe')));
+    const prior=fs.readFileSync(path.join(releaseRoot,'publish/RovarinSetup.exe'));
+    await assert.rejects(verifyAndPublish(releaseRoot,async()=>{throw new Error('mock installer failed');}),/mock installer failed/);assert(fs.readFileSync(path.join(releaseRoot,'publish/RovarinSetup.exe')).equals(prior));
+    await assert.rejects(verifyAndPublish(releaseRoot,async()=>{fs.writeFileSync(path.join(releaseRoot,'dist/RovarinSetup.exe'),'changed during verification');}),/Build changed/);assert(fs.readFileSync(path.join(releaseRoot,'publish/RovarinSetup.exe')).equals(prior));
     console.log('PASS installed-only handoff, fixed arguments, acknowledgement/commit, duplicate guard, launch failure and verify-before-publish preservation (mock release fixture)');
     const service = new EnhancedSupport({ root: path.join(payload, 'app'), stateDirectory: temp, execute: (command, args, options, callback) => {
       assert(command.endsWith('powershell.exe')); assert(args.includes(path.join(payload, 'app/scripts/install-enhanced.ps1'))); assert(options.timeout === 300000);

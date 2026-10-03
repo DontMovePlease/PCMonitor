@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Report a security vulnerability privately
-    url: https://github.com/DontMovePlease/PCMonitor/security/advisories/new
+    url: https://github.com/DontMovePlease/Rovarin/security/advisories/new
     about: Do not disclose exploit details in a public issue.

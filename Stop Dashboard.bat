@@ -1,8 +1,8 @@
 @echo off
-title Stop PC Monitor Dashboard
+title Stop Rovarin Dashboard
 cd /d "%~dp0"
 echo ======================================================
-echo       Stopping PC Monitor Dashboard Server
+echo       Stopping Rovarin Dashboard Server
 echo ======================================================
 echo.
 

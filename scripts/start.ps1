@@ -14,7 +14,7 @@ if ($runtime.state -ne 'none') {
     Write-Host "[ERROR] Existing server ownership is $($runtime.state). No second server started." -ForegroundColor Red
     return
 }
-Write-Host '[ACTION] Launching PC Monitor Dashboard in background...' -ForegroundColor Cyan
+Write-Host '[ACTION] Launching Rovarin Dashboard in background...' -ForegroundColor Cyan
 $vbsPath = Join-Path $projectDir 'run_hidden.vbs'
 Start-Process -FilePath wscript.exe -ArgumentList "`"$vbsPath`"" -WorkingDirectory $projectDir -WindowStyle Hidden
 $runtime = Wait-DashboardRuntime $projectDir

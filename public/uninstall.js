@@ -20,8 +20,8 @@
   form.addEventListener('submit', async event => {
     event.preventDefault();
     if (busy || accepted || !/^(?:\d{6}|\d{12})$/.test(pin.value)) return;
-    const policy = removeData.checked ? 'Your PIN and PC Monitor settings will be erased.' : 'Your PIN and settings will be preserved for reinstall.';
-    if (!window.confirm(`Uninstall PC Monitor from this PC? Remote access will stop. ${policy} PawnIO and Tailscale remain installed.`)) return;
+    const policy = removeData.checked ? 'Your PIN and Rovarin settings will be erased.' : 'Your PIN and settings will be preserved for reinstall.';
+    if (!window.confirm(`Uninstall Rovarin from this PC? Remote access will stop. ${policy} PawnIO and Tailscale remain installed.`)) return;
     busy = true; button.disabled = true;
     feedback.textContent = 'Validating the fixed Windows uninstall handoff…';
     try {
@@ -31,10 +31,10 @@
       const result = await response.json();
       if (response.status === 202 && result.code === 'uninstall-accepted') {
         accepted = true; removeData.disabled = true; pin.disabled = true;
-        feedback.textContent = 'Uninstall accepted. PC Monitor is shutting down and this dashboard will become unreachable. If removal does not finish, check Windows Settings → Apps on the PC. No automatic retry will be made.';
+        feedback.textContent = 'Uninstall accepted. Rovarin is shutting down and this dashboard will become unreachable. If removal does not finish, check Windows Settings → Apps on the PC. No automatic retry will be made.';
         window.pcMonitorUninstalling = true;
         window.dispatchEvent(new CustomEvent('pc-monitor-uninstalling'));
-      } else feedback.textContent = result.error || 'Uninstall was not accepted. PC Monitor remains running.';
+      } else feedback.textContent = result.error || 'Uninstall was not accepted. Rovarin remains running.';
     } catch (_) {
       // A lost response might already have committed the handoff. Never retry it.
       feedback.textContent = 'The result could not be confirmed. Check Windows Apps on the PC before trying again.';

@@ -96,7 +96,7 @@ function claimInstance(directory, preferredPort) {
   if (oldLock !== null) {
     let owner;
     try { owner = JSON.parse(oldLock); } catch (_) { throw new Error('Instance ownership cannot be verified.'); }
-    if (!Number.isSafeInteger(owner.pid) || owner.pid < 1 || alive(owner.pid)) throw new Error('A PC Monitor instance is already running or its ownership cannot be verified.');
+    if (!Number.isSafeInteger(owner.pid) || owner.pid < 1 || alive(owner.pid)) throw new Error('A Rovarin instance is already running or its ownership cannot be verified.');
     if (read(lock) !== oldLock) throw new Error('Instance ownership changed during startup.');
     fs.unlinkSync(lock);
   }

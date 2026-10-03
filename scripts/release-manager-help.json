@@ -1,0 +1,34 @@
+{
+  "Save Project Progress": {
+    "safety": "LOCAL SAVE",
+    "body": "Save approved project files on this PC so you can return to this point later. No GitHub upload. Other people see no change. Review the files before saving."
+  },
+  "Upload Project to GitHub": {
+    "safety": "CHANGES GITHUB",
+    "body": "Save your approved project files and upload them to GitHub. Other people can inspect the updated project. This does not create a downloadable Rovarin version. Private files are excluded."
+  },
+  "Preview New Release": {
+    "safety": "READ ONLY",
+    "body": "See what publishing an update would do. No files, tools or GitHub content are changed. No installer is built. Start here if you are unsure."
+  },
+  "Publish New Version": {
+    "safety": "PUBLIC DOWNLOAD",
+    "body": "Build, test and verify a new Rovarin version, then ask you to approve publication. Other people can see and download it. Local version/build files change during preparation. Preview first."
+  },
+  "Restore Project Progress": {
+    "safety": "LOCAL CHANGE",
+    "body": "Return approved project files on this PC to an earlier save. Unfinished source work is backed up first. Private files stay local. GitHub is not changed. Review the chosen save before restoring."
+  },
+  "Updates & Tools": {
+    "safety": "CHECKS ARE READ ONLY",
+    "body": "Check required development software and GitHub sign-in. Only an individually approved Git or GitHub CLI update changes software on this PC. These checks do not change your project or GitHub."
+  },
+  "Check Project Status": {
+    "safety": "READ ONLY",
+    "body": "Check the current version, changed files and GitHub connection. Nothing is saved, uploaded or published. Your PC and GitHub stay unchanged."
+  },
+  "Open GitHub": {
+    "safety": "READ ONLY",
+    "body": "Open your online project in a browser. No project files or GitHub content are changed."
+  }
+}

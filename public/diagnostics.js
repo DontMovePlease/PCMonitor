@@ -13,7 +13,7 @@
   const saveMode = document.getElementById('saveTemperatureMode');
 
   function reportText(data) {
-    return ['PC Monitor compatibility report', `Checked: ${data.generatedAt}`, data.overall.title,
+    return ['Rovarin compatibility report', `Checked: ${data.generatedAt}`, data.overall.title,
       ...data.checks.map(check => `${check.label}: ${check.status}${check.value !== undefined && typeof check.value !== 'object' ? ` · ${check.value}` : ''}\n  ${check.summary}`)
     ].join('\n');
   }
@@ -43,21 +43,40 @@
       if (check.value !== undefined && typeof check.value !== 'object') {
         const value = document.createElement('p'); value.className = 'diagnostics-value'; value.textContent = String(check.value); card.append(value);
       }
+      if (check.id === 'cpu-temperature') {
+        const actions = document.createElement('div'); actions.className = 'diagnostics-actions';
+        actions.dataset.enhancedActions = ''; card.append(actions);
+      }
+      if (window.chrome?.webview && check.id === 'tailscale' && check.status === 'unavailable') {
+        const actions = document.createElement('div'); actions.className = 'diagnostics-actions';
+        const download = document.createElement('a'); download.textContent = 'Download Tailscale';
+        download.href = 'https://tailscale.com/download/windows'; download.target = '_blank'; download.rel = 'noopener noreferrer';
+        const note = document.createElement('p'); note.textContent = 'Optional for local use; needed for remote access. Opens the official download page.';
+        actions.append(download, note); card.append(actions);
+      }
+      if (window.chrome?.webview && check.id === 'tailscale-status' && check.status !== 'supported') {
+        const actions = document.createElement('div'); actions.className = 'diagnostics-actions';
+        const recheck = document.createElement('button'); recheck.type = 'button'; recheck.textContent = 'Re-check';
+        recheck.addEventListener('click', () => refresh(true));
+        const note = document.createElement('p'); note.textContent = 'If installed, open Tailscale and connect, then re-check. Rovarin does not change your network settings.';
+        actions.append(recheck, note); card.append(actions);
+      }
       list.append(card);
     }
     reportField.value = reportText(data);
     document.getElementById('diagnosticsReportDetails').hidden = false;
     copyButton.disabled = false;
+    window.dispatchEvent(new CustomEvent('rovarin-diagnostics-rendered'));
   }
 
-  async function refresh() {
+  async function refresh(force = false) {
     if (busy || savingMode || page.hidden || !clientVisible()) return;
     busy = true; refreshButton.disabled = true;
     if (modeSelector) modeSelector.disabled = true;
     if (saveMode) saveMode.disabled = true;
     feedback.textContent = 'Checking compatibility…';
     try {
-      const response = await fetch('/api/diagnostics', { credentials: 'same-origin', cache: 'no-store' });
+      const response = await fetch(force ? '/api/diagnostics?refresh=1' : '/api/diagnostics', { credentials: 'same-origin', cache: 'no-store' });
       if (response.status === 401) { window.location.replace('/'); return; }
       if (!response.ok) throw new Error('request-failed');
       render(await response.json());
@@ -86,7 +105,7 @@
       feedback.textContent = 'Select and copy the text report below.';
     }
   });
-  refreshButton.addEventListener('click', refresh);
+  refreshButton.addEventListener('click', () => refresh(true));
   const allowExperimental = document.getElementById('enableExperimentalTemperature');
   if (allowExperimental) allowExperimental.addEventListener('change', () => {
     const option = document.getElementById('experimentalTemperatureOption');

@@ -17,7 +17,7 @@ function Complete-LocalOnboarding {}
 function New-Report($kind){
     $available=if($kind -eq 'missing'){'unavailable'}else{'supported'}
     $state=if($kind -eq 'connected'){'Running'}elseif($kind -eq 'disconnected'){'NeedsLogin'}else{$null}
-    return @{overall=@{title='PC Monitor is compatible with this PC.'};checks=@(
+    return @{overall=@{title='Rovarin is compatible with this PC.'};checks=@(
         @{id='tailscale';status=$available},@{id='tailscale-status';status=$(if($state -eq 'Running'){'supported'}else{'unavailable'});value=$state},
         @{id='tailscale-ip';value=$(if($kind -eq 'connected'){'100.64.1.2'}else{$null})},
         @{id='cpu-temperature';status='unavailable'},@{id='enhanced-driver';summary='Enhanced temperature is optional. Local monitoring remains available.'}

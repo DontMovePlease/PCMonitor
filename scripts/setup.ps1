@@ -13,13 +13,13 @@ function Get-PhoneSetupState($Report, [int]$Port) {
         $parsed.GetAddressBytes()[1] -ge 64 -and $parsed.GetAddressBytes()[1] -le 127
     if ($status.value -eq 'Running' -and $status.status -eq 'supported' -and $validIp -and $Port -ge 1 -and $Port -le 65535) {
         $address = "http://${candidate}:$Port"
-        return @{kind='connected';status='Connected';address=$address;install=$false;instructions="Connect another device`r`n1. Install Tailscale on that device.`r`n2. Sign into the same Tailscale network as this PC.`r`n3. Open $address in its browser (or scan the QR code).`r`n4. Enter your PC Monitor PIN."}
+        return @{kind='connected';status='Connected';address=$address;install=$false;instructions="Connect another device`r`n1. Install Tailscale on that device.`r`n2. Sign into the same Tailscale network as this PC.`r`n3. Open $address in its browser (or scan the QR code).`r`n4. Enter your Rovarin PIN."}
     }
     if ($availability.status -eq 'unavailable' -and -not $candidate -and -not $status.value) {
-        return @{kind='missing';status='Not installed';address=$null;install=$true;instructions="Connect another device (optional)`r`nPC Monitor is installed successfully and works locally.`r`nFor secure remote access, install Tailscale on this PC and your other device, then sign into the same Tailscale network.`r`nYou can finish now and connect later."}
+        return @{kind='missing';status='Not installed';address=$null;install=$true;instructions="Connect another device (optional)`r`nRovarin is installed successfully and works locally.`r`nFor secure remote access, install Tailscale on this PC and your other device, then sign into the same Tailscale network.`r`nYou can finish now and connect later."}
     }
     $explanation = if ($availability.status -eq 'supported') { 'Tailscale is installed but not connected.' } else { 'Tailscale connection status is unconfirmed.' }
-    return @{kind='disconnected';status='Not connected / unconfirmed';address=$null;install=$false;instructions="Connect another device (optional)`r`n$explanation`r`nOpen Tailscale and sign in/connect, then choose Re-check Tailscale.`r`nYour local PC Monitor dashboard remains available."}
+    return @{kind='disconnected';status='Not connected / unconfirmed';address=$null;install=$false;instructions="Connect another device (optional)`r`n$explanation`r`nOpen Tailscale and sign in/connect, then choose Re-check Tailscale.`r`nYour local Rovarin dashboard remains available."}
 }
 $appDir = Split-Path -Parent $PSScriptRoot
 $installed = Test-Path -LiteralPath (Join-Path $appDir 'installation.json')
@@ -65,7 +65,7 @@ if ($runtime.state -eq 'none') {
     $deadline = (Get-Date).AddSeconds(15)
     do { $runtime = Get-DashboardRuntime $appDir; if ($runtime.state -eq 'owned' -and $runtime.healthy) { break }; Start-Sleep -Milliseconds 200 } while ((Get-Date) -lt $deadline)
 }
-if ($runtime.state -ne 'owned' -or -not $runtime.healthy) { throw 'PC Monitor is not healthy.' }
+if ($runtime.state -ne 'owned' -or -not $runtime.healthy) { throw 'Rovarin is not healthy.' }
 # Recovery is a native user-launched window. No PIN HTTP endpoint or bypass.
 if ($RegeneratePin) {
     & $node (Join-Path $appDir 'pin-manager.js') --regenerate | Out-Null
@@ -105,7 +105,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
 $form = New-Object Windows.Forms.Form
-$form.Text = 'PC Monitor - Setup and PIN Recovery'
+$form.Text = 'Rovarin - Setup and PIN Recovery'
 $form.ClientSize = New-Object Drawing.Size(640,700)
 $form.MinimumSize = New-Object Drawing.Size(560,480)
 $form.StartPosition = 'CenterScreen'
@@ -123,7 +123,7 @@ if ([Windows.Forms.SystemInformation]::HighContrast) {
     $accent=[Drawing.SystemColors]::Highlight
 }
 $form.BackColor=$background; $form.ForeColor=$foreground
-$iconPath=Join-Path $appDir 'PCMonitor.ico'
+$iconPath=Join-Path $appDir 'Rovarin.ico'
 if(Test-Path -LiteralPath $iconPath){$form.Icon=New-Object Drawing.Icon($iconPath)}
 $body=New-Object Windows.Forms.Panel
 $body.Dock='Fill'; $body.AutoScroll=$true; $body.Padding=New-Object Windows.Forms.Padding(24,20,24,16)
@@ -160,11 +160,11 @@ function New-SetupPair {
     $pair.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle('Percent',50))) | Out-Null
     return $pair
 }
-$title=New-SetupLabel $(if($firstRun){'Welcome to PC Monitor'}else{'Setup and PIN Recovery'})
+$title=New-SetupLabel $(if($firstRun){'Welcome to Rovarin'}else{'Setup and PIN Recovery'})
 $title.Font=New-Object Drawing.Font('Segoe UI',20,[Drawing.FontStyle]::Bold)
 $title.ForeColor=$foreground; Add-SetupRow $title
 Add-SetupRow (New-SetupLabel 'Your dashboard is ready on this PC. Connecting another device is optional.')
-$pinHint=New-SetupLabel 'Your PC Monitor PIN signs you in on this PC and other devices. Keep it private.'
+$pinHint=New-SetupLabel 'Your Rovarin PIN signs you in on this PC and other devices. Keep it private.'
 Add-SetupRow $pinHint
 $pinRow=New-SetupPair
 $pinRow.ColumnStyles[0].Width=100; $pinRow.ColumnStyles[1].SizeType='Absolute'; $pinRow.ColumnStyles[1].Width=150
@@ -197,7 +197,7 @@ $phoneLabel = New-SetupLabel $phoneState.instructions
 $phoneLabel.Dock='Top'; $phoneLabel.Margin=New-Object Windows.Forms.Padding(0,0,16,0)
 $qrBox=New-Object Windows.Forms.PictureBox
 $qrBox.Size=New-Object Drawing.Size(156,156); $qrBox.SizeMode='Zoom'; $qrBox.Margin=New-Object Windows.Forms.Padding(8,0,0,0)
-$qrBox.AccessibleName='Scan to open PC Monitor on another device'
+$qrBox.AccessibleName='Scan to open Rovarin on another device'
 $remoteRow.Controls.Add($phoneLabel,0,0); $remoteRow.Controls.Add($qrBox,1,0); Add-SetupRow $remoteRow
 $tailscale = New-SetupButton 'Install Tailscale'
 $tailscale.Add_Click({ Start-Process 'https://tailscale.com/download/windows' })
@@ -213,7 +213,7 @@ Add-SetupRow (New-SetupLabel 'Local desktop works without Tailscale. PIN recover
 $footer=New-Object Windows.Forms.Panel
 $footer.Dock='Bottom'; $footer.Height=72; $footer.Padding=New-Object Windows.Forms.Padding(24,12,24,16)
 $footer.BackColor=$background
-$open = New-SetupButton 'Finish / Open PC Monitor'
+$open = New-SetupButton 'Finish / Open Rovarin'
 $open.Dock='Fill'; $open.BackColor=$accent; $open.ForeColor=[Drawing.Color]::White
 $footer.Controls.Add($open); $form.Controls.Add($footer)
 $open.Add_Click({

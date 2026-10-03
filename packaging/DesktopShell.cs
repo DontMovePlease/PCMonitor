@@ -28,7 +28,7 @@ internal static class DesktopShell
     internal static string BuildIdentity()
     {
         using (var sha = SHA256.Create())
-            return "Local\\PCMonitor.Desktop." + BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(
+            return "Local\\Rovarin.Desktop." + BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(
                 AppDirectory.ToUpperInvariant() + WindowsIdentity.GetCurrent().User.Value))).Replace("-", "");
     }
     internal static void AssertPlain(string path)
@@ -81,7 +81,7 @@ internal static class DesktopShell
             }
             return 0;
         }
-        catch { MessageBox.Show("PC Monitor could not open safely. Try reopening PC Monitor. No unrelated process was stopped.", "PC Monitor", MessageBoxButtons.OK, MessageBoxIcon.Information); return 1; }
+        catch { MessageBox.Show("Rovarin could not open safely. Try reopening Rovarin. No unrelated process was stopped.", "Rovarin", MessageBoxButtons.OK, MessageBoxIcon.Information); return 1; }
     }
     internal static int CloseExisting()
     {
@@ -122,6 +122,7 @@ internal sealed class DesktopWindow : Form
     private readonly Button retry = new Button { Text = "Try again", Width = 130, Height = 42 };
     private readonly Button runtimeLink = new Button { Text = "Install WebView2", Width = 155, Height = 42 };
     private readonly Button desktopExit = new Button { Text = "×", FlatStyle = FlatStyle.Flat, ForeColor = Color.FromArgb(148,163,184), BackColor = Color.FromArgb(10,16,27), Font = new Font("Segoe UI",16), TabStop = true, AccessibleName = "Exit desktop app" };
+    private readonly Button desktopMinimize = new Button { Text = "−", FlatStyle = FlatStyle.Flat, ForeColor = Color.FromArgb(148,163,184), BackColor = Color.FromArgb(10,16,27), Font = new Font("Segoe UI",16), TabStop = true, AccessibleName = "Minimize Rovarin" };
     private readonly NotifyIcon tray;
     private WebView2 view;
     private string origin;
@@ -129,6 +130,7 @@ internal sealed class DesktopWindow : Form
     private Process preparation;
     private Rectangle normalBounds;
     private bool wasMaximized;
+    private bool loginPresentation, changingBounds;
     private TaskCompletionSource<string> addressRequest;
     private readonly JavaScriptSerializer json = new JavaScriptSerializer { MaxJsonLength = 8192, RecursionLimit = 8 };
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
@@ -137,19 +139,24 @@ internal sealed class DesktopWindow : Form
 
     internal DesktopWindow()
     {
-        Text = "PC Monitor"; MinimumSize = new Size(760, 560); Size = new Size(980, 740);
+        Text = "Rovarin"; MinimumSize = new Size(760, 560); Size = new Size(900, 680);
         FormBorderStyle = FormBorderStyle.None; ControlBox = false;
         MaximizedBounds = Screen.GetWorkingArea(this);
         StartPosition = FormStartPosition.CenterScreen; AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = recovery.BackColor;
-        Icon = new Icon(Path.Combine(DesktopShell.AppDirectory, "PCMonitor.ico"));
+        Icon = new Icon(Path.Combine(DesktopShell.AppDirectory, "Rovarin.ico"));
         RestoreBoundsFromDisk();
-        normalBounds = Bounds;
+        normalBounds = WindowState == FormWindowState.Maximized ? RestoreBounds : Bounds;
+        wasMaximized = WindowState == FormWindowState.Maximized;
         Controls.Add(recovery); recovery.Controls.Add(title); recovery.Controls.Add(description); recovery.Controls.Add(actions);
         desktopExit.FlatAppearance.BorderSize = 0;
         desktopExit.FlatAppearance.MouseOverBackColor = Color.FromArgb(115,35,48);
         desktopExit.Click += delegate { ExitShell(); };
         Controls.Add(desktopExit);
+        desktopMinimize.FlatAppearance.BorderSize = 0;
+        desktopMinimize.FlatAppearance.MouseOverBackColor = Color.FromArgb(35,52,71);
+        desktopMinimize.Click += delegate { WindowState = FormWindowState.Minimized; };
+        Controls.Add(desktopMinimize);
         MouseEventHandler dragRecovery = delegate(object sender, MouseEventArgs e) {
             if (e.Button == MouseButtons.Left) { ReleaseCapture(); SendMessage(Handle, 0xA1, new IntPtr(2), IntPtr.Zero); }
         };
@@ -161,25 +168,26 @@ internal sealed class DesktopWindow : Form
         retry.Click += async delegate { await StartAsync(false); };
         runtimeLink.Click += delegate { External("https://developer.microsoft.com/microsoft-edge/webview2/#download-section"); };
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Open PC Monitor", null, delegate { OpenWindow(); });
+        menu.Items.Add("Open Rovarin", null, delegate { OpenWindow(); });
         menu.Items.Add("Copy Mobile Address", null, async delegate { await CopyAddressAsync(); });
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Restart PC Monitor Backend…", null, async delegate {
-            if (!busy && MessageBox.Show(this, "Restart the backend? Connected dashboards will reconnect and require the PIN again.", "PC Monitor", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) == DialogResult.OK)
+        menu.Items.Add("Restart Rovarin Backend…", null, async delegate {
+            if (!busy && MessageBox.Show(this, "Restart the backend? Connected dashboards will reconnect and require the PIN again.", "Rovarin", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) == DialogResult.OK)
                 await StartAsync(true);
         });
         menu.Items.Add("Exit Desktop App", null, delegate { ExitShell(); });
-        tray = new NotifyIcon { Icon = Icon, Text = "PC Monitor", Visible = true, ContextMenuStrip = menu };
+        tray = new NotifyIcon { Icon = Icon, Text = "Rovarin", Visible = true, ContextMenuStrip = menu };
         tray.DoubleClick += delegate { OpenWindow(); };
         Shown += async delegate { await StartAsync(false); };
-        Resize += delegate { LayoutRecovery(); if (WindowState == FormWindowState.Normal) normalBounds = Bounds; wasMaximized = WindowState == FormWindowState.Maximized; QueueVisibility(); };
-        Move += delegate { if (WindowState == FormWindowState.Normal) normalBounds = Bounds; };
+        Resize += delegate { LayoutRecovery(); if (!loginPresentation && !changingBounds) { if (WindowState == FormWindowState.Normal) normalBounds = Bounds; wasMaximized = WindowState == FormWindowState.Maximized; } QueueVisibility(); };
+        Move += delegate { if (!loginPresentation && !changingBounds && WindowState == FormWindowState.Normal) normalBounds = Bounds; };
         FormClosing += delegate(object sender, FormClosingEventArgs e) {
             SaveBounds();
             if (!exiting && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); QueueVisibility(); }
         };
         FormClosed += delegate { tray.Visible = false; tray.Dispose(); if (view != null) view.Dispose(); StopPreparation(); };
-        State("Opening PC Monitor", "Starting or reusing your local server…", false, false);
+        ApplyLoginPresentation(true);
+        State("Opening Rovarin", "Starting or reusing your local server…", false, false);
     }
     protected override void OnHandleCreated(EventArgs e)
     {
@@ -214,10 +222,34 @@ internal sealed class DesktopWindow : Form
     private async void ExitShell() {
         if (exiting) return;
         exiting = true;
-        if (view != null && initialized) {
-            try { await SetClientVisibilityAsync(false); await Task.Delay(200); } catch { }
-        }
-        Close();
+        // A stalled WebView must not leave the native X permanently waiting.
+        // Normal release is attempted; the existing lease TTL covers a dead view.
+        try { if (view != null && initialized) await Task.WhenAny(ReleaseForExitAsync(), Task.Delay(750)); }
+        finally { if (!IsDisposed) Close(); }
+    }
+    private async Task ReleaseForExitAsync() {
+        try { await SetClientVisibilityAsync(false); } catch { }
+    }
+    private void ApplyLoginPresentation(bool login) {
+        if (loginPresentation == login || exiting || IsDisposed) return;
+        changingBounds = true;
+        try {
+            if (login && !loginPresentation) {
+                if (WindowState == FormWindowState.Normal) normalBounds = Bounds;
+                wasMaximized = WindowState == FormWindowState.Maximized;
+            }
+            loginPresentation = login;
+            WindowState = FormWindowState.Normal;
+            MinimumSize = login ? new Size(440, 520) : new Size(760, 560);
+            if (login) {
+                var area = Screen.FromControl(this).WorkingArea;
+                int width = Math.Min(480, area.Width), height = Math.Min(600, area.Height);
+                Bounds = new Rectangle(area.Left + (area.Width - width) / 2, area.Top + (area.Height - height) / 2, width, height);
+            } else {
+                Bounds = normalBounds;
+                if (wasMaximized) WindowState = FormWindowState.Maximized;
+            }
+        } finally { changingBounds = false; LayoutRecovery(); }
     }
     private void StopPreparation() {
         // This is ONLY the helper we spawned/hold. Never kills a Node/backend.
@@ -226,7 +258,9 @@ internal sealed class DesktopWindow : Form
     private void LayoutRecovery() {
         int scaleHeight = (int)(36 * DeviceDpi / 96.0), scaleWidth = (int)(40 * DeviceDpi / 96.0);
         desktopExit.SetBounds(ClientSize.Width - scaleWidth, 0, scaleWidth, scaleHeight);
+        desktopMinimize.SetBounds(ClientSize.Width - scaleWidth * 2, 0, scaleWidth, scaleHeight);
         desktopExit.BringToFront();
+        desktopMinimize.BringToFront();
         int y = Math.Max(50, (ClientSize.Height - 210) / 2);
         title.SetBounds(20, y, ClientSize.Width - 40, 60);
         description.SetBounds(60, y + 67, ClientSize.Width - 120, 78);
@@ -295,26 +329,26 @@ internal sealed class DesktopWindow : Form
                 view.CoreWebView2.Navigate(origin + "/");
             } else if (action == "security-preference") {
                 bool required = Convert.ToBoolean(status["requireDesktopPin"]);
-                string message = required ? "Turn off PIN prompts in this native app? Anyone with access to this Windows account may open PC Monitor. Phone and ordinary browser access will still require your canonical PIN." : "Require your PC Monitor PIN on this PC again? You will be signed out now. Your phone uses the same PIN.";
+                string message = required ? "Turn off PIN prompts in this native app? Anyone with access to this Windows account may open Rovarin. Phone and ordinary browser access will still require your canonical PIN." : "Require your Rovarin PIN on this PC again? You will be signed out now. Your phone uses the same PIN.";
                 if (MessageBox.Show(this, message, "Require PIN on this PC", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
                 await NativeRequestAsync("/api/desktop/security", new { action = "preference", requireDesktopPin = !required, confirmed = true });
                 view.CoreWebView2.PostWebMessageAsJson(json.Serialize(new { kind = "security-state", requireDesktopPin = !required }));
                 if (!required) view.CoreWebView2.Navigate(origin + "/");
                 else MessageBox.Show(this, "PIN prompts are off for this native app only. Lock still requires your PIN before automatic access resumes.", "Security", MessageBoxButtons.OK, MessageBoxIcon.Information);
             } else {
-                if (MessageBox.Show(this, "Generate a new PC Monitor PIN? This signs out every device. The new PIN will be used on this PC and other devices.", "Generate New PIN", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+                if (MessageBox.Show(this, "Generate a new Rovarin PIN? This signs out every device. The new PIN will be used on this PC and other devices.", "Generate New PIN", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
                 var result = await NativeRequestAsync("/api/desktop/security", new { action = "rotate", confirmed = true });
                 // Native dialog only: never inject the PIN/credential into frontend JS.
-                MessageBox.Show(this, "Your new PC Monitor PIN is:\n\n" + Convert.ToString(result["pin"]) + "\n\nUse this same PIN on all your devices. Your old PIN no longer works.", "New PC Monitor PIN", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "Your new Rovarin PIN is:\n\n" + Convert.ToString(result["pin"]) + "\n\nUse this same PIN on all your devices. Your old PIN no longer works.", "New Rovarin PIN", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 view.CoreWebView2.Navigate(origin + "/");
             }
-        } catch { MessageBox.Show(this, "Sign in with your PC Monitor PIN, then try again. No security change was confirmed.", "Security", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        } catch { MessageBox.Show(this, "Sign in with your Rovarin PIN, then try again. No security change was confirmed.", "Security", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         finally { securityBusy = false; }
     }
     private async Task StartAsync(bool restart) {
         if (busy || exiting) return;
         busy = true; loading = true;
-        State("Opening PC Monitor", "Starting or reusing your local server…", false, false);
+        State("Opening Rovarin", "Starting or reusing your local server…", false, false);
         try {
             if (restart) await RunHelperAsync("stop.ps1", 20000);
             // First-run local Setup is interactive, so allow time to read/copy the PIN.
@@ -330,7 +364,7 @@ internal sealed class DesktopWindow : Form
             view.CoreWebView2.Navigate(origin + "/");
         }
         catch (WebView2RuntimeNotFoundException) { State("Desktop runtime needed", "Install Microsoft WebView2, then try again. Your backend and phone access remain available.", true, true); }
-        catch { if (!exiting && !IsDisposed) State("Couldn’t open PC Monitor", "The local dashboard was not ready. Try again. No unrelated process was stopped.", true, false); }
+        catch { if (!exiting && !IsDisposed) State("Couldn’t open Rovarin", "The local dashboard was not ready. Try again. No unrelated process was stopped.", true, false); }
         finally { busy = false; }
     }
     private async Task InitializeWebViewAsync() {
@@ -339,6 +373,7 @@ internal sealed class DesktopWindow : Form
         view = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = recovery.BackColor, AllowExternalDrop = false };
         Controls.Add(view); recovery.BringToFront();
         desktopExit.BringToFront();
+        desktopMinimize.BringToFront();
         try {
             var environment = await CoreWebView2Environment.CreateAsync(null, DesktopShell.ProfileDirectory);
             await view.EnsureCoreWebView2Async(environment);
@@ -371,10 +406,19 @@ internal sealed class DesktopWindow : Form
             core.PermissionRequested += delegate(object sender, CoreWebView2PermissionRequestedEventArgs e) { e.State = CoreWebView2PermissionState.Deny; };
             core.DownloadStarting += delegate(object sender, CoreWebView2DownloadStartingEventArgs e) { e.Cancel = true; };
             core.ProcessFailed += delegate { if (exiting || IsDisposed) return; State("Desktop view interrupted", "Try again to reopen the dashboard. Your backend remains available to other devices.", true, false); initialized = false; view.Dispose(); view = null; };
-            core.NavigationCompleted += delegate(object sender, CoreWebView2NavigationCompletedEventArgs e) {
+            core.NavigationCompleted += async delegate(object sender, CoreWebView2NavigationCompletedEventArgs e) {
                 loading = false;
-                if (e.IsSuccess) { recovery.Visible = false; desktopExit.BringToFront(); QueueVisibility(); }
-                else State("Dashboard unavailable", "The backend may have restarted. Try again to reopen PC Monitor.", true, false);
+                if (e.IsSuccess) {
+                    try {
+                        // Read presentation only from the trusted local document.
+                        if (!IsDashboardUri(core.Source, origin)) return;
+                        string login = await core.ExecuteScriptAsync("!!document.getElementById('pinInput')");
+                        if (exiting || IsDisposed) return;
+                        ApplyLoginPresentation(login == "true");
+                        recovery.Visible = false; LayoutRecovery(); QueueVisibility();
+                    } catch { if (!exiting && !IsDisposed) State("Dashboard unavailable", "Try again to reopen Rovarin.", true, false); }
+                }
+                else State("Dashboard unavailable", "The backend may have restarted. Try again to reopen Rovarin.", true, false);
             };
             initialized = true;
         } catch { view.Dispose(); view = null; throw; }
@@ -391,11 +435,14 @@ internal sealed class DesktopWindow : Form
         } catch { } finally { visibilityPending = false; }
     }
     private async Task SetClientVisibilityAsync(bool active) {
+        if (view == null || view.IsDisposed || IsDisposed) return;
         if (active) view.Visible = true;
         view.CoreWebView2.Resume();
         if (active) await Task.Delay(50);
+        if (view == null || view.IsDisposed || IsDisposed) return;
         // Fixed client event invokes the SAME frontend lease lifecycle as the web.
         await view.CoreWebView2.ExecuteScriptAsync("window.dispatchEvent(new CustomEvent('pc-monitor-desktop-visibility',{detail:{visible:" + (active ? "true" : "false") + "}}))");
+        if (view == null || view.IsDisposed || IsDisposed) return;
         view.Visible = active;
         // Let the existing release beacon finish. Hidden clients have no lease,
         // SSE or fallback/maintenance polling; don't block reopen on Chromium's
@@ -424,8 +471,8 @@ internal sealed class DesktopWindow : Form
             }
         } catch { } finally { addressRequest = null; }
         try {
-            if (address == null) tray.ShowBalloonTip(2500, "Mobile address unavailable", "Log in to PC Monitor and connect Tailscale, then try again. Your clipboard was not changed.", ToolTipIcon.Info);
-            else { Clipboard.SetText(address); tray.ShowBalloonTip(2500, "Mobile address copied", "Connect your phone to Tailscale and enter your PC Monitor PIN.", ToolTipIcon.Info); }
+            if (address == null) tray.ShowBalloonTip(2500, "Mobile address unavailable", "Log in to Rovarin and connect Tailscale, then try again. Your clipboard was not changed.", ToolTipIcon.Info);
+            else { Clipboard.SetText(address); tray.ShowBalloonTip(2500, "Mobile address copied", "Connect your phone to Tailscale and enter your Rovarin PIN.", ToolTipIcon.Info); }
         } catch { }
         QueueVisibility();
     }
@@ -436,7 +483,9 @@ internal sealed class DesktopWindow : Form
             if (!File.Exists(file) || new FileInfo(file).Length > 1024 || (File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) return;
             var value = json.Deserialize<Dictionary<string, int>>(File.ReadAllText(file));
             var area = Screen.PrimaryScreen.WorkingArea;
-            int width = Math.Min(area.Width, Math.Max(760, value["width"])), height = Math.Min(area.Height, Math.Max(560, value["height"]));
+            // Migrate the old untouched default; retain deliberate custom sizes.
+            bool oldDefault = value["width"] == 980 && value["height"] == 740;
+            int width = Math.Min(area.Width, Math.Max(760, oldDefault ? 900 : value["width"])), height = Math.Min(area.Height, Math.Max(560, oldDefault ? 680 : value["height"]));
             var saved = new Rectangle(value["x"], value["y"], width, height);
             foreach (var screen in Screen.AllScreens) if (screen.WorkingArea.Contains(saved)) { Bounds = saved; StartPosition = FormStartPosition.Manual; break; }
             if (value["maximized"] == 1) WindowState = FormWindowState.Maximized;

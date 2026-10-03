@@ -6,38 +6,53 @@ if ($testDir -ne [IO.Path]::GetFullPath((Join-Path $repo 'packaging\test-install
 $registration = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{C51A4180-26D2-4F48-93BD-B40B182B78DA}_is1'
 # The real installer is tested only when it cannot replace an existing installed
 # product's registration. The development repository is not an installed product.
-if (Test-Path -LiteralPath $registration) { throw 'An installed PC Monitor already exists. Use a clean VM for this integration test.' }
-if (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'PC Monitor')) { throw 'An existing PC Monitor Start menu folder requires inspection before testing.' }
-$desktopLink = Join-Path ([Environment]::GetFolderPath('Desktop')) 'PC Monitor.lnk'
-if (Test-Path -LiteralPath $desktopLink) { throw 'An existing PC Monitor Desktop shortcut requires inspection before testing.' }
-if (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Startup')) 'PC Monitor.lnk')) { throw 'An existing PC Monitor startup shortcut requires inspection before testing.' }
+if (Test-Path -LiteralPath $registration) { throw 'An installed Rovarin already exists. Use a clean VM for this integration test.' }
+if (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Rovarin')) { throw 'An existing Rovarin Start menu folder requires inspection before testing.' }
+$desktopLink = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Rovarin.lnk'
+if (Test-Path -LiteralPath $desktopLink) { throw 'An existing Rovarin Desktop shortcut requires inspection before testing.' }
+if (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Startup')) 'Rovarin.lnk')) { throw 'An existing Rovarin startup shortcut requires inspection before testing.' }
+foreach ($folder in @([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('Startup'),[Environment]::GetFolderPath('Programs'))) {
+    if (Test-Path -LiteralPath (Join-Path $folder 'PC Monitor.lnk')) { throw 'An existing legacy shortcut requires a clean VM.' }
+}
+if (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'PC Monitor')) { throw 'An existing legacy Start menu folder requires a clean VM.' }
+$legacyDir = Join-Path $repo 'packaging\test-install-legacy'
+if (Test-Path -LiteralPath $legacyDir) { throw 'Legacy isolated fixture already exists; inspect it before rerunning.' }
 if (Test-Path -LiteralPath $testDir) { throw 'Isolated test directory already exists; inspect it before rerunning.' }
-$exe = Join-Path $repo 'dist\PCMonitorSetup.exe'
-$arguments = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=core','/TASKS=desktopPin', '/GROUP=PCMonitorIsolatedTest', "/DIR=`"$testDir`"", "/LOG=`"$(Join-Path $repo 'packaging\cache\integration.log')`"")
+$exe = Join-Path $repo 'dist\RovarinSetup.exe'
+$arguments = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=core','/TASKS=desktopPin', '/GROUP=RovarinIsolatedTest', "/DIR=`"$testDir`"", "/LOG=`"$(Join-Path $repo 'packaging\cache\integration.log')`"")
 $appDir = Join-Path $testDir 'app'
 $dataDir = Join-Path $testDir 'data'
 $cookieSession = $null
 $runtime = $null
 function Assert-Test($condition,$message) { if (-not $condition) { throw $message } }
 function Install-TestCopy {
-    $installer = Start-Process -FilePath $exe -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
+    # Previous start.ps1 changes location. Release the caller's directory handle
+    # before migration removes the old application-owned directory.
+    Set-Location $repo
+    # -Wait waits the whole descendant tree, including the intentional background
+    # server started for migration health verification. Wait only on Inno's handle.
+    $installer = Start-Process -FilePath $exe -ArgumentList $arguments -WindowStyle Hidden -PassThru
+    Assert-Test ($installer.WaitForExit(150000)) 'Installer exceeded bounded completion time; fixture retained.'
     Assert-Test ($installer.ExitCode -eq 0) "Installer failed: $($installer.ExitCode)"
     $installer.Dispose()
+    $migrationResult=Join-Path $dataDir 'rebrand-result.json'
+    if(Test-Path -LiteralPath $migrationResult){Write-Output ([IO.File]::ReadAllText($migrationResult));throw 'Installer migration did not complete.'}
+    Assert-Test (-not (Test-Path -LiteralPath (Join-Path $dataDir 'rebrand-migration.json'))) 'Migration receipt remained after installer completion.'
     $entry=Get-ItemProperty -LiteralPath $registration -ErrorAction Stop
     $expectedVersion=(Get-Content -LiteralPath (Join-Path $repo 'package.json') -Raw | ConvertFrom-Json).version
-    Assert-Test ($entry.DisplayName -ceq 'PC Monitor' -and $entry.DisplayVersion -ceq $expectedVersion -and $entry.Publisher -ceq 'PC Monitor') 'Installed Apps identity/version/publisher incorrect.'
+    Assert-Test ($entry.DisplayName -ceq 'Rovarin' -and $entry.DisplayVersion -ceq $expectedVersion -and $entry.Publisher -ceq 'Rovarin') 'Installed Apps identity/version/publisher incorrect.'
     Assert-Test ($entry.InstallLocation.TrimEnd('\') -ieq $testDir -and $entry.UninstallString -ceq ('"'+(Join-Path $testDir 'unins000.exe')+'"')) 'Installed Apps uninstall command/location incorrect.'
     Assert-Test (-not $entry.SystemComponent -and -not $entry.NoRemove) 'Installed Apps entry is hidden or cannot be removed.'
     Assert-Test (Test-Path -LiteralPath (Join-Path $appDir 'uninstall-trust.json')) 'Trusted uninstall metadata missing.'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $appDir 'scripts\installed-uninstall.ps1') -Mode Validate
     Assert-Test ($LASTEXITCODE -eq 0) 'Fresh installer safety validation failed.'
-    foreach ($linkPath in @($desktopLink,(Join-Path ([Environment]::GetFolderPath('Programs')) 'PC Monitor\PC Monitor.lnk'))) {
+    foreach ($linkPath in @($desktopLink,(Join-Path ([Environment]::GetFolderPath('Programs')) 'Rovarin\Rovarin.lnk'))) {
         Assert-Test (Test-Path -LiteralPath $linkPath) 'Installed shortcut missing.'
         $link=(New-Object -ComObject WScript.Shell).CreateShortcut($linkPath)
-        Assert-Test ($link.TargetPath -ieq (Join-Path $appDir 'PCMonitor.exe') -and $link.Arguments -ceq '' -and $link.WorkingDirectory -ieq $appDir) 'Shortcut does not use the application-owned launcher/working directory.'
+        Assert-Test ($link.TargetPath -ieq (Join-Path $appDir 'Rovarin.exe') -and $link.Arguments -ceq '' -and $link.WorkingDirectory -ieq $appDir) 'Shortcut does not use the application-owned launcher/working directory.'
     }
-    Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Startup')) 'PC Monitor.lnk'))) 'Unchecked startup preference was ignored.'
-    Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'PC Monitor\PC Monitor Web Dashboard.lnk'))) 'Retired desktop browser shortcut remains after install/upgrade.'
+    Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Startup')) 'Rovarin.lnk'))) 'Unchecked startup preference was ignored.'
+    Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Rovarin\Rovarin Web Dashboard.lnk'))) 'Retired desktop browser shortcut remains after install/upgrade.'
 }
 function Assert-Removed([bool]$Full) {
     $limit=(Get-Date).AddSeconds(45)
@@ -54,8 +69,8 @@ function Assert-Removed([bool]$Full) {
     Assert-Test (-not (Test-Path -LiteralPath (Join-Path $testDir 'runtime\node.exe'))) 'Bundled runtime remained.'
     Assert-Test (-not (Test-Path -LiteralPath (Join-Path $testDir 'desktop-profile'))) 'Desktop browser cache remained.'
     Assert-Test (-not (Test-Path -LiteralPath $registration)) 'Uninstall registration remained.'
-    Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'PC Monitor\PC Monitor.lnk'))) 'Dead Start menu shortcut remained.'
-    Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Startup')) 'PC Monitor.lnk'))) 'Startup registration remained.'
+    Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Rovarin\Rovarin.lnk'))) 'Dead Start menu shortcut remained.'
+    Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Startup')) 'Rovarin.lnk'))) 'Startup registration remained.'
     Assert-Test (-not (Test-Path -LiteralPath $desktopLink)) 'Desktop shortcut remained.'
     foreach ($name in @('server.pid','server-state.json','server.instance.json','server-start.lock','server.log','server-error.log','launcher-error.log','enhanced-install.json','onboarding.lock','uninstall-result.json','uninstall-handoff.json')) {
         Assert-Test (-not (Test-Path -LiteralPath (Join-Path $dataDir $name))) "Runtime artifact remained: $name"
@@ -144,15 +159,15 @@ function Start-Process {
         } finally { $ownedProcess.Dispose() }
         }
         $launcherPid=$null
-        foreach($entry in @($desktopLink,(Join-Path ([Environment]::GetFolderPath('Programs')) 'PC Monitor\PC Monitor.lnk'),'finish')) {
+        foreach($entry in @($desktopLink,(Join-Path ([Environment]::GetFolderPath('Programs')) 'Rovarin\Rovarin.lnk'),'finish')) {
             Get-ChildItem -LiteralPath $dataDir -Filter 'qa-desktop.json.*' | Remove-Item -Force
-            if($entry -eq 'finish'){Start-Process -FilePath (Join-Path $appDir 'PCMonitor.exe') -WindowStyle Hidden}
+            if($entry -eq 'finish'){Start-Process -FilePath (Join-Path $appDir 'Rovarin.exe') -WindowStyle Hidden}
             else {Start-Process -FilePath $entry -WindowStyle Hidden}
             if($entry -eq $desktopLink){Start-Process -FilePath $entry -WindowStyle Hidden}
             $nativeDeadline=(Get-Date).AddSeconds(35)
             do {
                 $script:runtime=Get-DashboardRuntime $appDir
-                $shells=@(Get-CimInstance Win32_Process -Filter "Name='PCMonitor.exe'" | Where-Object {$_.ExecutablePath -ieq (Join-Path $appDir 'PCMonitor.exe') -and $_.CommandLine -notmatch 'close-desktop'})
+                $shells=@(Get-CimInstance Win32_Process -Filter "Name='Rovarin.exe'" | Where-Object {$_.ExecutablePath -ieq (Join-Path $appDir 'Rovarin.exe') -and $_.CommandLine -notmatch 'close-desktop'})
                 if($runtime.healthy -and $shells.Count -eq 1){break};Start-Sleep -Milliseconds 200
             } while((Get-Date) -lt $nativeDeadline)
             Assert-Test ($runtime.healthy -and $shells.Count -eq 1) 'Native shortcut did not reach one healthy backend/desktop.'
@@ -160,7 +175,7 @@ function Start-Process {
             $ownedShell=Get-Process -Id $shells[0].ProcessId -ErrorAction Stop
             try {
                 $null=$ownedShell.Handle
-                $close=Start-Process -FilePath (Join-Path $appDir 'PCMonitor.exe') -ArgumentList 'close-desktop' -WindowStyle Hidden -PassThru -Wait
+                $close=Start-Process -FilePath (Join-Path $appDir 'Rovarin.exe') -ArgumentList 'close-desktop' -WindowStyle Hidden -PassThru -Wait
                 Assert-Test ($close.ExitCode -eq 0 -and $ownedShell.WaitForExit(10000)) 'Native desktop did not close through its owned fixed event.'
                 $close.Dispose()
             } finally {$ownedShell.Dispose()}
@@ -168,9 +183,9 @@ function Start-Process {
             Assert-Test ($runtime.healthy -and $runtime.pid -eq $nativePid) 'Exiting native UI stopped/replaced backend.'
             # Internal developer/diagnostic browser access still obeys the
             # same actual-port/duplicate protection as before.
-            Start-Process -FilePath (Join-Path $appDir 'PCMonitor.exe') -ArgumentList 'web' -WindowStyle Hidden
+            Start-Process -FilePath (Join-Path $appDir 'Rovarin.exe') -ArgumentList 'web' -WindowStyle Hidden
             $expectedProbes=1
-            if($entry -eq $desktopLink){Start-Process -FilePath (Join-Path $appDir 'PCMonitor.exe') -ArgumentList 'web' -WindowStyle Hidden;$expectedProbes=2}
+            if($entry -eq $desktopLink){Start-Process -FilePath (Join-Path $appDir 'Rovarin.exe') -ArgumentList 'web' -WindowStyle Hidden;$expectedProbes=2}
             $deadline=(Get-Date).AddSeconds(25)
             do {
                 $probes=@(Get-ChildItem -LiteralPath $dataDir -Filter 'qa-desktop.json.*' | Where-Object {$_.Extension -ne '.tmp'})
@@ -202,20 +217,66 @@ function Start-Process {
 try {
     # Upgrade the protected previously published artifact before testing a true
     # clean install. This catches version/registration and old-shortcut changes.
-    $previousInstaller=Join-Path $repo 'publish\PCMonitorSetup.exe'
+    $previousInstaller=Join-Path $repo 'packaging\cache\pre-rovarin\PCMonitorSetup.exe'
+    $legacyUpgrade=Test-Path -LiteralPath $previousInstaller
+    if (-not $legacyUpgrade) { $previousInstaller=Join-Path $repo 'publish\RovarinSetup.exe' }
     if(Test-Path -LiteralPath $previousInstaller) {
-        $previous=Start-Process -FilePath $previousInstaller -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
+        $previousArguments=$arguments
+        if($legacyUpgrade){$previousArguments=@($arguments | ForEach-Object { $_.Replace($testDir,$legacyDir) })}
+        $previous=Start-Process -FilePath $previousInstaller -ArgumentList $previousArguments -WindowStyle Hidden -Wait -PassThru
         Assert-Test ($previous.ExitCode -eq 0) 'Previous candidate install failed.';$previous.Dispose()
         $previousVersion=(Get-ItemProperty -LiteralPath $registration).DisplayVersion
-        . (Join-Path $appDir 'scripts\dashboard-runtime.ps1')
-        & (Join-Path $appDir 'scripts\start.ps1') | Out-Null
-        $runtime=Get-DashboardRuntime $appDir;Assert-Test $runtime.healthy 'Previous installed candidate not healthy.'
-        $upgradeConfig=[IO.File]::ReadAllText((Join-Path $dataDir 'config.json'))
-        [IO.File]::WriteAllText((Join-Path $dataDir 'temperature-settings.json'),'{"mode":"off"}')
+        $previousApp=if($legacyUpgrade){Join-Path $legacyDir 'app'}else{$appDir}
+        $previousData=if($legacyUpgrade){Join-Path $legacyDir 'data'}else{$dataDir}
+        . (Join-Path $previousApp 'scripts\dashboard-runtime.ps1')
+        & (Join-Path $previousApp 'scripts\start.ps1') | Out-Null
+        $runtime=Get-DashboardRuntime $previousApp;Assert-Test $runtime.healthy 'Previous installed candidate not healthy.'
+        if($legacyUpgrade){
+            $legacyPreferences=Get-Content -LiteralPath (Join-Path $previousData 'config.json') -Raw | ConvertFrom-Json
+            $legacyPreferences.requireDesktopPin=$false
+            $legacyPreferences | Add-Member -NotePropertyName desktopLocked -NotePropertyValue $true -Force
+            [IO.File]::WriteAllText((Join-Path $previousData 'config.json'),($legacyPreferences|ConvertTo-Json),(New-Object Text.UTF8Encoding($false)))
+        }
+        $upgradeConfig=[IO.File]::ReadAllText((Join-Path $previousData 'config.json'))
+        [IO.File]::WriteAllText((Join-Path $previousData 'temperature-settings.json'),'{"mode":"off"}')
+        if($legacyUpgrade){
+            $enhancedState=@{exitCode=1460;completedAt=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()}|ConvertTo-Json -Compress
+            [IO.File]::WriteAllText((Join-Path $previousData 'enhanced-install.json'),$enhancedState)
+        }
+        $credential=& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $previousApp 'scripts\native-trust.ps1')
+        Assert-Test ($LASTEXITCODE -eq 0 -and $credential.Length -eq 44) 'Legacy desktop trust unavailable.'
+        $credential=$null
+        $legacyTrustHash=(Get-FileHash -LiteralPath (Join-Path $previousData 'desktop-trust.bin')).Hash
+        if($legacyUpgrade){[IO.File]::WriteAllText((Join-Path $legacyDir 'user-keeps.txt'),'unrelated user file')}
         Install-TestCopy
         Assert-Test (Test-Path -LiteralPath (Join-Path $dataDir 'onboarding-complete.json')) 'Upgrade unexpectedly triggers automatic PIN display.'
         Assert-Test ([IO.File]::ReadAllText((Join-Path $dataDir 'config.json')) -ceq $upgradeConfig) 'Previous-release upgrade changed PIN/config.'
+        if($legacyUpgrade){
+            $migratedPreferences=Get-Content -LiteralPath (Join-Path $dataDir 'config.json') -Raw | ConvertFrom-Json
+            Assert-Test ($migratedPreferences.requireDesktopPin -eq $false -and $migratedPreferences.desktopLocked -eq $true) 'Migration reset trusted-desktop preference or persistent lock.'
+        }
         Assert-Test ([IO.File]::ReadAllText((Join-Path $dataDir 'temperature-settings.json')) -ceq '{"mode":"off"}') 'Previous-release upgrade changed temperature settings.'
+        Assert-Test ((Get-FileHash -LiteralPath (Join-Path $dataDir 'desktop-trust.bin')).Hash -ceq $legacyTrustHash) 'Migration changed desktop trust.'
+        if($legacyUpgrade){
+            Assert-Test ([IO.File]::ReadAllText((Join-Path $dataDir 'enhanced-install.json')) -ceq $enhancedState) 'Migration lost the driver retry guard.'
+            $guarded=& (Join-Path $testDir 'runtime\node.exe') -e "const E=require(process.argv[1]).EnhancedSupport;const s=new E({root:process.argv[2],stateDirectory:process.argv[3]}).status();if(!s.installing||s.result.code!=='install-unconfirmed')process.exit(1)" (Join-Path $appDir 'enhanced-support.js') $appDir $dataDir
+            Assert-Test ($LASTEXITCODE -eq 0) 'Migration cleared the unconfirmed driver installation protection.'
+        }
+        $credential=& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $appDir 'scripts\native-trust.ps1')
+        Assert-Test ($LASTEXITCODE -eq 0 -and $credential.Length -eq 44) 'Migrated DPAPI credential cannot be read.'
+        $credential=$null
+        if($legacyUpgrade){
+            Assert-Test (-not (Test-Path -LiteralPath (Join-Path $legacyDir 'app'))) 'Obsolete legacy application remained.'
+            Assert-Test (-not (Test-Path -LiteralPath (Join-Path $legacyDir 'data'))) 'Obsolete legacy configuration remained.'
+            Assert-Test ([IO.File]::ReadAllText((Join-Path $legacyDir 'user-keeps.txt')) -ceq 'unrelated user file') 'Migration removed unrelated user data.'
+            # Test-created sentinel only, after proving migration retained it.
+            Remove-Item -LiteralPath (Join-Path $legacyDir 'user-keeps.txt') -Force
+            Assert-Test (@(Get-ChildItem -LiteralPath $legacyDir -Force).Count -eq 0) 'Unexpected legacy fixture files remain.'
+            Remove-Item -LiteralPath $legacyDir -Force
+            Assert-Test (-not (Test-Path -LiteralPath $legacyDir)) 'Obsolete legacy installation directory remained.'
+            Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'PC Monitor'))) 'Legacy Start menu remained.'
+            Assert-Test (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Desktop')) 'PC Monitor.lnk'))) 'Legacy Desktop shortcut remained.'
+        }
         Assert-Test (-not (Get-Process -Id $runtime.pid -ErrorAction SilentlyContinue)) 'Upgrade did not stop its previous owned server.'
         $nextVersion=(Get-ItemProperty -LiteralPath $registration).DisplayVersion
         Uninstall-TestCopy $true
@@ -228,7 +289,7 @@ try {
     Assert-Test (-not (Test-Path -LiteralPath (Join-Path $appDir 'config.json'))) 'Installer must not distribute a PIN/config in its application payload.'
     $freshInstallerConfig = Get-Content -LiteralPath (Join-Path $dataDir 'config.json') -Raw | ConvertFrom-Json
     Assert-Test ($freshInstallerConfig.pin -match '^\d{6}$' -and $freshInstallerConfig.requireDesktopPin -eq $true) 'Fresh installer must locally generate a canonical PIN and apply default desktop PIN protection.'
-    Assert-Test (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'PC Monitor\PC Monitor.lnk')) 'Start menu shortcut missing.'
+    Assert-Test (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Rovarin\Rovarin.lnk')) 'Start menu shortcut missing.'
     . (Join-Path $appDir 'scripts\dashboard-runtime.ps1')
     & (Join-Path $appDir 'scripts\start.ps1')
     $runtime = Get-DashboardRuntime $appDir

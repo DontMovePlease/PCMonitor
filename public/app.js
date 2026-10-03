@@ -1037,6 +1037,7 @@ function showAppPage(pageId, recordHistory = true) {
 function setSidebarOpen(open) {
   document.body.classList.toggle('sidebar-expanded', open);
   document.getElementById('sidebarToggle').setAttribute('aria-expanded', String(open));
+  document.getElementById('appSidebar').inert = !open && matchMedia('(max-width: 699px)').matches;
   // Keep the mobile backdrop mounted so its closing fade can finish. CSS
   // disables its hit testing immediately; desktop never needs an overlay.
   document.getElementById('sidebarBackdrop').hidden = !matchMedia('(max-width: 699px)').matches;
@@ -1052,12 +1053,10 @@ matchMedia('(max-width: 699px)').addEventListener('change', event => {
 });
 try { if (!matchMedia('(max-width: 699px)').matches) setSidebarOpen(localStorage.getItem('pc-monitor-sidebar-expanded') === 'true'); } catch (_) {}
 if (matchMedia('(max-width: 699px)').matches) setSidebarOpen(false);
-document.querySelectorAll('.page-nav-button').forEach(button => button.addEventListener('click', () => {
+document.querySelectorAll('.page-nav-button[data-page]').forEach(button => button.addEventListener('click', () => {
   showAppPage(button.dataset.page);
   if (matchMedia('(max-width: 699px)').matches) setSidebarOpen(false);
 }));
-const settingsButton = document.getElementById('nativeSettingsButton');
-document.querySelector('.native-app-bar')?.append(settingsButton);
 const nativeSecurity = !!window.chrome?.webview;
 document.getElementById('nativeSecurityControls').hidden = !nativeSecurity;
 function showSecuritySettings(security) {
@@ -1091,6 +1090,7 @@ document.getElementById('nativeForwardButton')?.addEventListener('click', () => 
 });
 document.getElementById('nativeSettingsButton')?.addEventListener('click', () => {
   showAppPage('diagnosticsPage');
+  if (matchMedia('(max-width: 699px)').matches) setSidebarOpen(false);
   requestAnimationFrame(() => {
     document.querySelector('.temperature-settings')?.scrollIntoView({ block: 'start' });
     document.getElementById('monitorSettings')?.focus({ preventScroll: true });
@@ -1228,9 +1228,9 @@ document.getElementById('logoutButton')?.addEventListener('click', async () => {
   if (nativeSecurity) { window.chrome.webview.postMessage('security-lock'); return; }
   try {
     const response = await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
-    if (!response.ok) { alert('PC Monitor could not lock. Please try again.'); return; }
+    if (!response.ok) { alert('Rovarin could not lock. Please try again.'); return; }
     window.location.replace('/');
-  } catch (_) { alert('PC Monitor could not lock. Please try again.'); }
+  } catch (_) { alert('Rovarin could not lock. Please try again.'); }
 });
 window.addEventListener('DOMContentLoaded', async () => {
   await startDashboardSession();

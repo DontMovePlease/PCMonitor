@@ -11,7 +11,7 @@ const pins = require('../pin-manager');
 
 async function testNativeDesktopSecurity() {
   if (process.platform !== 'win32') return;
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-monitor-native-security-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rovarin-native-security-'));
   let child, url, captured = '';
   try {
     for (const name of ['server.js','server-lifecycle.js','pin-manager.js','process-termination.js','enhanced-support.js','uninstall-manager.js','temperature-manager.js','cpu-temperature-provider.js','process-stats.js','maintenance.js','package.json']) fs.copyFileSync(path.join(root,name),path.join(directory,name));
@@ -19,7 +19,7 @@ async function testNativeDesktopSecurity() {
     fs.copyFileSync(path.join(root,'scripts/native-trust.ps1'),path.join(directory,'scripts/native-trust.ps1'));
     const configFile = path.join(directory,'config.json');
     pins.writeConfig(configFile,{pin:'654321',retained:true});
-    const installer = fs.readFileSync(path.join(root,'packaging/PCMonitor.iss'),'utf8');
+    const installer = fs.readFileSync(path.join(root,'packaging/Rovarin.iss'),'utf8');
     assert(installer.includes('Name: "desktopPin";') && installer.includes('Flags: checkedonce; Check: FreshDesktopPreference'));
     assert(installer.includes('if not ExistingConfiguration then begin') && installer.includes('Passwordless desktop requires interactive confirmation.'));
     assert(installer.includes('MB_YESNO or MB_DEFBUTTON2') && installer.includes("Preference := '--desktop-pin-on'"));
@@ -62,7 +62,7 @@ async function testNativeDesktopSecurity() {
     assert.strictEqual(pins.readConfig(configFile).pin,'654321');assert.strictEqual(pins.readConfig(configFile).retained,true);
     assert.strictEqual((await call('/api/desktop/auth',{},'',null)).status,401,'loopback alone never bypasses PIN');
     assert.strictEqual((await call('/api/desktop/auth',{},'',Buffer.alloc(32).toString('base64'))).status,401,'forged native credential rejected');
-    assert.strictEqual((await fetch(url+'/api/metrics',{headers:{'User-Agent':'PCMonitor.exe'}})).status,401,'phone/browser still protected');
+    assert.strictEqual((await fetch(url+'/api/metrics',{headers:{'User-Agent':'Rovarin.exe'}})).status,401,'phone/browser still protected');
     const native=await call('/api/desktop/auth');assert.strictEqual(native.status,200);const nativeCookie=cookieOf(native);
     assert.strictEqual((await fetch(url+'/api/metrics',{headers:{Cookie:nativeCookie}})).status,200);
     assert.strictEqual((await call('/api/desktop/security',{action:'lock'},nativeCookie)).status,200);
@@ -88,7 +88,7 @@ async function testNativeDesktopSecurity() {
 }
 
 async function testLocalPinManagement() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-monitor-pin-test-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rovarin-pin-test-'));
   let child;
   const file = path.join(directory, 'config.json');
   try {
@@ -271,7 +271,7 @@ async function testSessionsLeasesAndSse() {
     assert.strictEqual(asset.headers.get('cache-control'), 'no-store');
     assert.match(asset.headers.get('content-type'), match[1].includes('.css?') ? /text\/css/ : /javascript/);
   }
-  assert.match(dashboardHtml, /PC Monitor Dashboard/);
+  assert.match(dashboardHtml, /Rovarin Dashboard/);
   assert.doesNotMatch(dashboardHtml, /Unlock Dashboard|pinInput/, 'a valid session should skip PIN login');
   assert.match(dashboardHtml, /data-page="processesPage"/, 'the authenticated dashboard should expose the Processes view');
   assert.match(dashboardHtml, /id="processesPage"[^>]*data-profile="processes"/, 'the Processes page should request its focused monitoring profile');

@@ -8,6 +8,7 @@ try {
     $stateRoot = $appRoot
     if (Test-Path -LiteralPath (Join-Path $appRoot 'installation.json')) { $stateRoot = Join-Path (Split-Path -Parent $appRoot) 'data' }
     $file = Join-Path $stateRoot 'desktop-trust.bin'
+    # Compatibility-only DPAPI entropy: preserves existing desktop credentials.
     $entropy = [Text.Encoding]::UTF8.GetBytes('PCMonitor.NativeDesktop.v1')
     if (-not (Test-Path -LiteralPath $file)) {
         $key = New-Object byte[] 32

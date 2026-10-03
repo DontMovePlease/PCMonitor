@@ -12,7 +12,7 @@ try {
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
-public static class PCMonitorTermination {
+public static class RovarinTermination {
     [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetProcessTimes(IntPtr h, out long creation, out long exit, out long kernel, out long user);
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool QueryFullProcessImageName(IntPtr h, uint flags, StringBuilder name, ref uint size);
@@ -40,6 +40,6 @@ public static class PCMonitorTermination {
 }
 '@
     $time = [DateTime]::Parse($identity.startedAt, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime().ToFileTimeUtc()
-    $code = [PCMonitorTermination]::Run([int]$identity.pid, $identity.name, $time)
+    $code = [RovarinTermination]::Run([int]$identity.pid, $identity.name, $time)
     @{success=($code -eq 'terminated'); code=$code; verified=($code -eq 'terminated')} | ConvertTo-Json -Compress
 } catch { @{success=$false;code='server-error';verified=$false} | ConvertTo-Json -Compress }
